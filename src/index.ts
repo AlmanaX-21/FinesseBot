@@ -1,4 +1,10 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { existsSync } from 'node:fs';
+
+dotenv.config();
+if (existsSync('.env.local')) {
+  dotenv.config({ path: '.env.local', override: true });
+}
 import {
   Client,
   GatewayIntentBits,
