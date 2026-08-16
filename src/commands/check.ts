@@ -4,7 +4,7 @@ import {
   SlashCommandBuilder,
   GuildMember
 } from 'discord.js';
-import { RoleRule } from '../types.js';
+import { BotConfig } from '../types.js';
 import { MemberStore } from '../database.js';
 import { evaluateMember } from '../evaluator.js';
 import { syncMemberRoles } from '../assigner.js';
@@ -22,7 +22,7 @@ export const checkCommand = {
 
   async execute(
     interaction: ChatInputCommandInteraction,
-    rules: RoleRule[],
+    config: BotConfig,
     store: MemberStore
   ): Promise<void> {
     if (!interaction.guild) {
@@ -44,10 +44,10 @@ export const checkCommand = {
       interaction.guild.id,
       stats.messageCount,
       member.joinedTimestamp,
-      rules
+      config.roles
     );
 
-    await syncMemberRoles(member, rules, stats.messageCount);
+    await syncMemberRoles(member, config.roles, stats.messageCount);
 
     const embed = new EmbedBuilder()
       .setTitle(`Stats & Role Progress: ${member.displayName}`)

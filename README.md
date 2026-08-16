@@ -13,6 +13,9 @@ A soft-coded, modular Discord bot that automatically tracks member activity and 
 - **Dual Matching**: Matches roles by Discord Role Snowflake ID or by Role Name.
 - **Live Tracking & Periodic Sync**: Instantly evaluates roles on new messages and runs periodic background sweeps for server tenure.
 - **Built-in Slash Commands**:
+  - `/finesse role-add <role> [message_count] [days_in_server]`: Adds or updates a role threshold rule in `config.json` and syncs members.
+  - `/finesse role-remove <role>`: Removes a role rule from `config.json`.
+  - `/finesse list`: Lists all configured automated role rules.
   - `/check [target]`: Displays message count, days in server, unlocked roles, and missing requirements for upcoming roles.
   - `/syncroles`: Admin command (`Manage Roles` permission) to audit and synchronize all server members.
 - **Crash-Resilient Persistence**: Lightweight, atomic local store (`data/stats.json`) preserving member stats across restarts.

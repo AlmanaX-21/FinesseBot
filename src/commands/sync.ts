@@ -3,7 +3,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder
 } from 'discord.js';
-import { RoleRule } from '../types.js';
+import { BotConfig } from '../types.js';
 import { MemberStore } from '../database.js';
 import { syncGuildRoles } from '../assigner.js';
 
@@ -15,7 +15,7 @@ export const syncCommand = {
 
   async execute(
     interaction: ChatInputCommandInteraction,
-    rules: RoleRule[],
+    config: BotConfig,
     store: MemberStore
   ): Promise<void> {
     if (!interaction.guild) {
@@ -28,7 +28,7 @@ export const syncCommand = {
     try {
       const { processed, rolesAssigned } = await syncGuildRoles(
         interaction.guild,
-        rules,
+        config.roles,
         store
       );
 

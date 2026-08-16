@@ -82,7 +82,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
   const command = commands.find(c => c.data.name === interaction.commandName);
   if (command) {
-    await command.execute(interaction, config.roles, store);
+    await command.execute(interaction, config, store);
   }
 });
 
