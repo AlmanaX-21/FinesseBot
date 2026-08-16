@@ -1,0 +1,23 @@
+{
+  "checkIntervalMinutes": 60,
+  "roles": [
+    {
+      "name": "Chat Enthusiast",
+      "roleId": null,
+      "messageCount": 100,
+      "timeInServerDays": null
+    },
+    {
+      "name": "Month Veteran",
+      "roleId": null,
+      "messageCount": null,
+      "timeInServerDays": 30
+    },
+    {
+      "name": "Dedicated Member",
+      "roleId": null,
+      "messageCount": 500,
+      "timeInServerDays": 180
+    }
+  ]
+}
