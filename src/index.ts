@@ -18,7 +18,6 @@ import { syncMemberRoles, syncGuildRoles } from './assigner.js';
 import { commands } from './commands/index.js';
 
 const token = process.env.DISCORD_TOKEN;
-const clientId = process.env.CLIENT_ID;
 const guildId = process.env.GUILD_ID;
 
 if (!token) {
@@ -36,23 +35,20 @@ const client = new Client({
   ]
 });
 
-async function registerSlashCommands(): Promise<void> {
-  if (!clientId) {
-    return;
-  }
+async function registerSlashCommands(appId: string): Promise<void> {
   const rest = new REST({ version: '10' }).setToken(token!);
   const body = commands.map(c => c.data.toJSON());
 
   if (guildId) {
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body });
+    await rest.put(Routes.applicationGuildCommands(appId, guildId), { body });
   } else {
-    await rest.put(Routes.applicationCommands(clientId), { body });
+    await rest.put(Routes.applicationCommands(appId), { body });
   }
 }
 
 client.once(Events.ClientReady, async readyClient => {
   console.log(`Logged in as ${readyClient.user.tag}`);
-  await registerSlashCommands();
+  await registerSlashCommands(readyClient.user.id);
 
   const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
   setInterval(async () => {
