@@ -1,10 +1,5 @@
 import dotenv from 'dotenv';
 import { existsSync } from 'node:fs';
-
-dotenv.config();
-if (existsSync('.env.local')) {
-  dotenv.config({ path: '.env.local', override: true });
-}
 import {
   Client,
   GatewayIntentBits,
@@ -16,6 +11,19 @@ import { loadConfig } from './config.js';
 import { MemberStore } from './database.js';
 import { syncMemberRoles, syncGuildRoles } from './assigner.js';
 import { commands } from './commands/index.js';
+import { getTicketDb } from './tickets/database.js';
+import { startApiServer } from './tickets/api-server.js';
+import { buildClaimModal, handleClaimModalSubmit } from './tickets/claim-handler.js';
+import {
+  handleCloseRequest,
+  handleCloseConfirm,
+  handleCloseCancel
+} from './tickets/close-handler.js';
+
+dotenv.config();
+if (existsSync('.env.local')) {
+  dotenv.config({ path: '.env.local', override: true });
+}
 
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.GUILD_ID;
@@ -26,6 +34,7 @@ if (!token) {
 
 const config = loadConfig();
 const store = new MemberStore();
+const ticketDb = getTicketDb();
 
 const client = new Client({
   intents: [
@@ -55,6 +64,16 @@ async function registerSlashCommands(appId: string): Promise<void> {
 client.once(Events.ClientReady, async readyClient => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   await registerSlashCommands(readyClient.user.id);
+
+  startApiServer({
+    db: ticketDb,
+    guildResolver: () => {
+      if (guildId && guildId.trim().length > 0) {
+        return readyClient.guilds.cache.get(guildId.trim()) || null;
+      }
+      return readyClient.guilds.cache.first() || null;
+    }
+  });
 
   const minutes = Math.min(10, Math.max(5, config.checkIntervalMinutes || 5));
   const intervalMs = minutes * 60 * 1000;
@@ -98,35 +117,54 @@ client.on(Events.GuildMemberAdd, async member => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand()) {
-    return;
-  }
-
-  const command = commands.find(c => c.data.name === interaction.commandName);
-  if (!command) {
-    return;
-  }
-
-  try {
-    await command.execute(interaction, config, store);
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred.';
-    console.error(`[Command Error] /${interaction.commandName}:`, error);
+  if (interaction.isChatInputCommand()) {
+    const command = commands.find(c => c.data.name === interaction.commandName);
+    if (!command) {
+      return;
+    }
 
     try {
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ content: `❌ **Error:** ${errorMsg}` });
-      } else {
-        await interaction.reply({ content: `❌ **Error:** ${errorMsg}`, ephemeral: true });
+      await command.execute(interaction, config, store);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred.';
+      console.error(`[Command Error] /${interaction.commandName}:`, error);
+
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply({ content: `❌ **Error:** ${errorMsg}` });
+        } else {
+          await interaction.reply({ content: `❌ **Error:** ${errorMsg}`, ephemeral: true });
+        }
+      } catch (replyErr) {
+        console.error('[Command Error] Could not send error reply:', replyErr);
       }
-    } catch (replyErr) {
-      console.error('[Command Error] Could not send error reply:', replyErr);
+    }
+    return;
+  }
+
+  if (interaction.isButton()) {
+    if (interaction.customId === 'btn_claim_ticket') {
+      await interaction.showModal(buildClaimModal());
+    } else if (interaction.customId === 'btn_close_ticket') {
+      await handleCloseRequest(interaction, ticketDb);
+    } else if (interaction.customId === 'btn_confirm_close_ticket') {
+      await handleCloseConfirm(interaction, ticketDb);
+    } else if (interaction.customId === 'btn_cancel_close_ticket') {
+      await handleCloseCancel(interaction);
+    }
+    return;
+  }
+
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId === 'modal_claim_ticket') {
+      await handleClaimModalSubmit(interaction, ticketDb);
     }
   }
 });
 
 function handleShutdown(): void {
   store.saveSync();
+  ticketDb.close();
   client.destroy();
   process.exit(0);
 }
