@@ -20,8 +20,12 @@ export class MemberStore {
     if (!existsSync(this.filePath)) {
       return;
     }
-    const content = readFileSync(this.filePath, 'utf-8');
-    this.data = JSON.parse(content);
+    try {
+      const content = readFileSync(this.filePath, 'utf-8');
+      this.data = JSON.parse(content);
+    } catch {
+      this.data = {};
+    }
   }
 
   private scheduleSave(): void {

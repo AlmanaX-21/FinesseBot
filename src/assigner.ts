@@ -5,7 +5,8 @@ import { MemberStore } from './database.js';
 
 export function findGuildRole(guild: Guild, rule: RoleRule): Role | undefined {
   if (rule.roleId) {
-    return guild.roles.cache.get(rule.roleId);
+    const role = guild.roles.cache.get(rule.roleId);
+    if (role) return role;
   }
   const normalized = rule.name.toLowerCase().trim();
   return guild.roles.cache.find(r => r.name.toLowerCase().trim() === normalized);
@@ -33,18 +34,15 @@ export async function syncMemberRoles(
 
   for (const rule of evaluation.eligibleRoles) {
     const role = findGuildRole(member.guild, rule);
-    if (!role) {
-      continue;
-    }
-
-    if (member.roles.cache.has(role.id)) {
+    if (!role || member.roles.cache.has(role.id)) {
       continue;
     }
 
     try {
       await member.roles.add(role, 'Automated threshold reached');
       added.push(role.name);
-    } catch {
+    } catch (err) {
+      console.warn(`[Assigner] Failed to add "${role.name}" to "${member.user.tag}":`, err instanceof Error ? err.message : err);
       failed.push(role.name);
     }
   }
@@ -57,7 +55,14 @@ export async function syncGuildRoles(
   rules: RoleRule[],
   store: MemberStore
 ): Promise<{ processed: number; rolesAssigned: number }> {
-  const members = await guild.members.fetch();
+  let members;
+  try {
+    members = await guild.members.fetch();
+  } catch (err) {
+    console.error(`[Assigner] Failed to fetch guild members for "${guild.name}":`, err);
+    return { processed: 0, rolesAssigned: 0 };
+  }
+
   let rolesAssigned = 0;
   let processed = 0;
 
@@ -71,8 +76,9 @@ export async function syncGuildRoles(
     rolesAssigned += result.added.length;
     processed += 1;
 
-    // Rate limit buffer
-    await new Promise(resolve => setTimeout(resolve, 50));
+    if (result.added.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
   }
 
   return { processed, rolesAssigned };

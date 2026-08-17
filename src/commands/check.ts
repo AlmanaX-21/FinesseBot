@@ -30,11 +30,14 @@ export const checkCommand = {
       return;
     }
 
+    await interaction.deferReply();
+
     const targetUser = interaction.options.getUser('target') || interaction.user;
-    const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+    const member = interaction.guild.members.cache.get(targetUser.id) ||
+      await interaction.guild.members.fetch(targetUser.id).catch(() => null);
 
     if (!member || !member.joinedTimestamp) {
-      await interaction.reply({ content: 'Could not fetch member details.', ephemeral: true });
+      await interaction.editReply({ content: 'Could not fetch member details.' });
       return;
     }
 
@@ -81,6 +84,6 @@ export const checkCommand = {
       embed.addFields({ name: 'Upcoming Roles', value: nextList, inline: false });
     }
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.editReply({ embeds: [embed] });
   }
 };

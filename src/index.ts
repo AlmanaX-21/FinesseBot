@@ -36,13 +36,19 @@ const client = new Client({
 });
 
 async function registerSlashCommands(appId: string): Promise<void> {
-  const rest = new REST({ version: '10' }).setToken(token!);
-  const body = commands.map(c => c.data.toJSON());
+  try {
+    const rest = new REST({ version: '10' }).setToken(token!);
+    const body = commands.map(c => c.data.toJSON());
 
-  if (guildId) {
-    await rest.put(Routes.applicationGuildCommands(appId, guildId), { body });
-  } else {
-    await rest.put(Routes.applicationCommands(appId), { body });
+    if (guildId && guildId.trim().length > 0) {
+      await rest.put(Routes.applicationGuildCommands(appId, guildId), { body });
+      console.log(`Registered guild slash commands (${guildId})`);
+    } else {
+      await rest.put(Routes.applicationCommands(appId), { body });
+      console.log('Registered global slash commands');
+    }
+  } catch (error) {
+    console.error('[Slash Command Error]:', error);
   }
 }
 
@@ -50,21 +56,35 @@ client.once(Events.ClientReady, async readyClient => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   await registerSlashCommands(readyClient.user.id);
 
-  const intervalMs = Math.max(1, config.checkIntervalMinutes) * 60 * 1000;
+  const minutes = Math.min(10, Math.max(5, config.checkIntervalMinutes || 5));
+  const intervalMs = minutes * 60 * 1000;
+  console.log(`Periodic role sweep scheduled every ${minutes} minutes`);
+
   setInterval(async () => {
-    for (const [, guild] of readyClient.guilds.cache) {
-      await syncGuildRoles(guild, config.roles, store);
+    try {
+      for (const [, guild] of readyClient.guilds.cache) {
+        await syncGuildRoles(guild, config.roles, store);
+      }
+    } catch (err) {
+      console.error('[Periodic Sweep Error]:', err);
     }
   }, intervalMs);
 });
 
 client.on(Events.MessageCreate, async message => {
-  if (message.author.bot || !message.guild || !message.member) {
+  if (message.author.bot || !message.guild) {
+    return;
+  }
+
+  const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+  if (!member) {
     return;
   }
 
   const count = store.increment(message.guild.id, message.author.id);
-  await syncMemberRoles(message.member, config.roles, count);
+  await syncMemberRoles(member, config.roles, count).catch(err => {
+    console.warn('[Message Sync Error]:', err);
+  });
 });
 
 client.on(Events.GuildMemberAdd, async member => {
@@ -72,7 +92,9 @@ client.on(Events.GuildMemberAdd, async member => {
     return;
   }
   const stats = store.getStats(member.guild.id, member.id);
-  await syncMemberRoles(member, config.roles, stats.messageCount);
+  await syncMemberRoles(member, config.roles, stats.messageCount).catch(err => {
+    console.warn('[Join Sync Error]:', err);
+  });
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -81,8 +103,25 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 
   const command = commands.find(c => c.data.name === interaction.commandName);
-  if (command) {
+  if (!command) {
+    return;
+  }
+
+  try {
     await command.execute(interaction, config, store);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    console.error(`[Command Error] /${interaction.commandName}:`, error);
+
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply({ content: `❌ **Error:** ${errorMsg}` });
+      } else {
+        await interaction.reply({ content: `❌ **Error:** ${errorMsg}`, ephemeral: true });
+      }
+    } catch (replyErr) {
+      console.error('[Command Error] Could not send error reply:', replyErr);
+    }
   }
 });
 

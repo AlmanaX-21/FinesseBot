@@ -1,23 +1,29 @@
 {
-  "checkIntervalMinutes": 60,
+  "checkIntervalMinutes": 5,
   "roles": [
     {
-      "name": "Chat Enthusiast",
-      "roleId": null,
-      "messageCount": 100,
+      "name": "Neophyte",
+      "roleId": "1538915332318699562",
+      "messageCount": 500,
+      "timeInServerDays": 7
+    },
+    {
+      "name": "Initiate",
+      "roleId": "1538915337658171405",
+      "messageCount": 1500,
       "timeInServerDays": null
     },
     {
-      "name": "Month Veteran",
-      "roleId": null,
-      "messageCount": null,
-      "timeInServerDays": 30
+      "name": "Castellan",
+      "roleId": "1538915335917404160",
+      "messageCount": 5000,
+      "timeInServerDays": null
     },
     {
-      "name": "Dedicated Member",
-      "roleId": null,
-      "messageCount": 500,
-      "timeInServerDays": 180
+      "name": "Marshal",
+      "roleId": "1538915310617501826",
+      "messageCount": 15000,
+      "timeInServerDays": null
     }
   ]
 }

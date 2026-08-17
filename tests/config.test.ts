@@ -70,3 +70,28 @@ test('removeRoleRule removes rule by roleId or name', () => {
     rmSync(testConfigPath);
   }
 });
+
+test('loadConfig safely handles empty or partial config files', () => {
+  const testConfigPath = resolve(process.cwd(), './data/test-config-empty.json');
+  writeFileSync(testConfigPath, '{}', 'utf-8');
+
+  const loaded = loadConfig(testConfigPath);
+  assert.equal(Array.isArray(loaded.roles), true);
+  assert.equal(loaded.roles.length, 0);
+  assert.equal(loaded.checkIntervalMinutes, 5);
+
+  const rule: RoleRule = {
+    name: 'Newbie',
+    roleId: '999',
+    messageCount: 10,
+    timeInServerDays: null
+  };
+
+  const updated = addOrUpdateRoleRule(rule, testConfigPath);
+  assert.equal(updated.roles.length, 1);
+  assert.equal(updated.roles[0].name, 'Newbie');
+
+  if (existsSync(testConfigPath)) {
+    rmSync(testConfigPath);
+  }
+});

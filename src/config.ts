@@ -11,19 +11,23 @@ export function loadConfig(customPath?: string): BotConfig {
   const resolvedPath = getConfigPath(customPath);
 
   if (!existsSync(resolvedPath)) {
-    throw new Error(`Configuration file not found at ${resolvedPath}`);
+    return {
+      checkIntervalMinutes: 5,
+      roles: []
+    };
   }
 
-  const raw = readFileSync(resolvedPath, 'utf-8');
-  const parsed = JSON.parse(raw) as BotConfig;
-
-  if (!Array.isArray(parsed.roles)) {
-    throw new Error('Config missing "roles" array');
+  let parsed: Partial<BotConfig> = {};
+  try {
+    const raw = readFileSync(resolvedPath, 'utf-8');
+    parsed = raw.trim() ? JSON.parse(raw) : {};
+  } catch {
+    parsed = {};
   }
 
   return {
-    checkIntervalMinutes: parsed.checkIntervalMinutes || 60,
-    roles: parsed.roles
+    checkIntervalMinutes: typeof parsed.checkIntervalMinutes === 'number' ? parsed.checkIntervalMinutes : 5,
+    roles: Array.isArray(parsed.roles) ? parsed.roles : []
   };
 }
 

@@ -7,7 +7,6 @@ import {
 import { BotConfig, RoleRule } from '../types.js';
 import { MemberStore } from '../database.js';
 import { addOrUpdateRoleRule, removeRoleRule } from '../config.js';
-import { syncGuildRoles } from '../assigner.js';
 
 export const finesseCommand = {
   data: new SlashCommandBuilder()
@@ -81,8 +80,6 @@ export const finesseCommand = {
         return;
       }
 
-      await interaction.deferReply();
-
       const newRule: RoleRule = {
         name: role.name,
         roleId: role.id,
@@ -93,12 +90,6 @@ export const finesseCommand = {
       const updated = addOrUpdateRoleRule(newRule);
       activeConfig.roles = updated.roles;
 
-      const { processed, rolesAssigned } = await syncGuildRoles(
-        interaction.guild,
-        activeConfig.roles,
-        store
-      );
-
       const embed = new EmbedBuilder()
         .setTitle('Role Rule Configured')
         .setColor(0x57f287)
@@ -108,27 +99,26 @@ export const finesseCommand = {
           { name: 'Message Requirement', value: messageCount ? `${messageCount} messages` : 'None', inline: true },
           { name: 'Tenure Requirement', value: daysInServer ? `${daysInServer} days` : 'None', inline: true }
         )
-        .setFooter({ text: `Synced ${processed} members (assigned ${rolesAssigned} roles)` });
+        .setFooter({ text: 'Roles are checked automatically in the background cycle.' });
 
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.reply({ embeds: [embed] });
       return;
     }
 
     if (subcommand === 'role-remove') {
       const role = interaction.options.getRole('role', true);
-      await interaction.deferReply();
-
       const { updatedConfig, removedRule } = removeRoleRule(role.id);
       activeConfig.roles = updatedConfig.roles;
 
       if (!removedRule) {
-        await interaction.editReply({
-          content: `No active automated rule was configured for **${role.name}** (\`${role.id}\`).`
+        await interaction.reply({
+          content: `No active automated rule was configured for **${role.name}** (\`${role.id}\`).`,
+          ephemeral: true
         });
         return;
       }
 
-      await interaction.editReply({
+      await interaction.reply({
         content: `Removed **${removedRule.name}** from automated role rules in \`config.json\`.`
       });
       return;
