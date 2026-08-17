@@ -2,7 +2,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonInteraction,
-  ButtonStyle
+  ButtonStyle,
+  GuildTextBasedChannel
 } from 'discord.js';
 import { Database as DatabaseInstance } from 'better-sqlite3';
 import { closeTicketRecord, getTicketByChannelId } from './database.js';
@@ -83,12 +84,13 @@ export async function handleCloseConfirm(
   const channel = interaction.channel || (interaction.guild ? await interaction.guild.channels.fetch(channelId).catch(() => null) : null);
 
   if (channel && 'delete' in channel) {
+    const textChan = channel as GuildTextBasedChannel;
     if (delayMs <= 0) {
-      await (channel as any).delete('Commission ticket closed and completed').catch(() => null);
+      await textChan.delete('Commission ticket closed and completed').catch(() => null);
     } else {
       setTimeout(async () => {
         try {
-          await (channel as any).delete('Commission ticket closed and completed');
+          await textChan.delete('Commission ticket closed and completed');
         } catch (err) {
           console.error('[Ticket Cleanup Error]:', err);
         }

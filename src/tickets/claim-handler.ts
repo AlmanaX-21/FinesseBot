@@ -6,9 +6,9 @@ import {
   ModalActionRowComponentBuilder,
   ModalBuilder,
   ModalSubmitInteraction,
-  PermissionFlagsBits,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  TextChannel
 } from 'discord.js';
 import { Database as DatabaseInstance } from 'better-sqlite3';
 import { claimTicketRecord, getTicketByCode } from './database.js';
@@ -40,7 +40,7 @@ export function buildClaimModal(): ModalBuilder {
     .setTitle('Claim Commission Ticket');
 
   const codeInput = new TextInputBuilder()
-    .setCustomId('ticket_code')
+    .setCustomId('input_ticket_code')
     .setLabel('Commission Code')
     .setPlaceholder('COM-XXXX-XX')
     .setStyle(TextInputStyle.Short)
@@ -58,8 +58,14 @@ export async function handleClaimModalSubmit(
   interaction: ModalSubmitInteraction,
   db: DatabaseInstance
 ): Promise<void> {
-  const rawCode = interaction.fields.getTextInputValue('ticket_code');
-  const code = rawCode.trim().toUpperCase();
+  let rawCode = '';
+  try {
+    rawCode = interaction.fields.getTextInputValue('input_ticket_code');
+  } catch {
+    rawCode = interaction.fields.getTextInputValue('ticket_code');
+  }
+
+  const code = (rawCode || '').trim().toUpperCase();
 
   const ticket = getTicketByCode(db, code);
 
@@ -80,13 +86,10 @@ export async function handleClaimModalSubmit(
     return;
   }
 
+  const textChannel = channel as TextChannel;
+
   try {
-    await (channel as any).permissionOverwrites.edit(interaction.user.id, {
-      [PermissionFlagsBits.ViewChannel.toString()]: true,
-      [PermissionFlagsBits.SendMessages.toString()]: true,
-      [PermissionFlagsBits.AttachFiles.toString()]: true,
-      [PermissionFlagsBits.EmbedLinks.toString()]: true,
-      [PermissionFlagsBits.ReadMessageHistory.toString()]: true,
+    await textChannel.permissionOverwrites.edit(interaction.user.id, {
       ViewChannel: true,
       SendMessages: true,
       AttachFiles: true,
@@ -103,17 +106,15 @@ export async function handleClaimModalSubmit(
       return;
     }
 
-    if ('send' in channel) {
-      await (channel as any).send({
-        content: `👋 Welcome <@${interaction.user.id}>! You've successfully claimed this ticket. Staff will be with you shortly.`
-      });
-    }
+    await textChannel.send({
+      content: `👋 Welcome <@${interaction.user.id}>! You've successfully claimed this ticket. Staff will be with you shortly.`
+    });
 
     await interaction.reply({
       content: `✅ **Ticket Claimed Successfully!** Jump into your private channel here: <#${ticket.channel_id}>`,
       ephemeral: true
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('[Claim Modal Error]:', err);
     await interaction.reply({
       content: '❌ **Error:** An unexpected error occurred while updating channel permissions.',

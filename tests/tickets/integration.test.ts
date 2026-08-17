@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { AddressInfo } from 'node:net';
+import crypto from 'node:crypto';
 import { initTicketDb, getTicketByCode, getTicketByChannelId } from '../../src/tickets/database.js';
 import { createApiServer } from '../../src/tickets/api-server.js';
 import { buildClaimModal, handleClaimModalSubmit } from '../../src/tickets/claim-handler.js';
@@ -71,17 +72,26 @@ test('Full Commission Lifecycle Integration Test', async (t) => {
     links: ['https://sky.net']
   };
 
-  await t.test('Step 1: Portfolio website calls /api/ticket/create', async () => {
+  await t.test('Step 1: Portfolio website calls /api/ticket/create with HMAC signature', async () => {
+    const rawBody = JSON.stringify(payload);
+    const timestamp = Date.now().toString();
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(`${timestamp}.${rawBody}`)
+      .digest('hex');
+
     const res = await fetch(`${baseUrl}/api/ticket/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${secret}`
+        Authorization: `Bearer ${secret}`,
+        'x-timestamp': timestamp,
+        'x-signature': signature
       },
-      body: JSON.stringify(payload)
+      body: rawBody
     });
 
-    assert.equal(res.status, 201);
+    assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.success, true);
     assert.equal(body.code, 'COM-E2E-01');

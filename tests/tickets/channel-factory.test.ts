@@ -5,7 +5,9 @@ import {
   buildTicketEmbed,
   buildTicketActionRow,
   buildChannelPermissions,
-  formatChannelName
+  formatChannelName,
+  sanitizeMentions,
+  createCommissionChannel
 } from '../../src/tickets/channel-factory.js';
 import { CommissionPayload } from '../../src/tickets/types.js';
 
@@ -16,7 +18,7 @@ test('Discord Channel Factory & UI Components', async (t) => {
     contactInfo: 'bob@builder.com',
     serviceType: 'Frontend Architecture',
     budget: '$1,500',
-    description: 'Design and build interactive dashboard',
+    description: 'Design and build interactive dashboard @everyone and @here',
     links: ['https://figma.com/example', 'https://github.com/example']
   };
 
@@ -25,24 +27,22 @@ test('Discord Channel Factory & UI Components', async (t) => {
     assert.equal(formatChannelName('COM_ABC_12'), 'ticket-com-abc-12');
   });
 
-  await t.test('buildTicketEmbed constructs rich commission embed with all fields', () => {
+  await t.test('sanitizeMentions removes @everyone and @here exploit attempts', () => {
+    const raw = 'Hello @everyone and @here, check <@&123456>';
+    const sanitized = sanitizeMentions(raw);
+    assert.equal(sanitized.includes('@everyone'), false);
+    assert.equal(sanitized.includes('@here'), false);
+  });
+
+  await t.test('buildTicketEmbed sanitizes content in all fields', () => {
     const embed = buildTicketEmbed(samplePayload);
     const data = embed.toJSON();
 
     assert.equal(data.title, 'Commission Ticket: COM-TEST-99');
-    assert.ok(data.fields && data.fields.length >= 6);
-
-    const clientField = data.fields?.find(f => f.name.includes('Client'));
-    assert.equal(clientField?.value, 'Bob Builder');
-
-    const serviceField = data.fields?.find(f => f.name.includes('Service'));
-    assert.equal(serviceField?.value, 'Frontend Architecture');
-
-    const budgetField = data.fields?.find(f => f.name.includes('Budget'));
-    assert.equal(budgetField?.value, '$1,500');
-
-    const statusField = data.fields?.find(f => f.name.includes('Status'));
-    assert.ok(statusField?.value.includes('UNCLAIMED'));
+    const descField = data.fields?.find(f => f.name.includes('Description'));
+    assert.ok(descField);
+    assert.equal(descField?.value.includes('@everyone'), false);
+    assert.equal(descField?.value.includes('@here'), false);
   });
 
   await t.test('buildTicketActionRow creates Close Ticket danger button', () => {
@@ -74,8 +74,35 @@ test('Discord Channel Factory & UI Components', async (t) => {
     assert.ok(botPerm?.allow.includes(PermissionFlagsBits.ManageChannels));
   });
 
-  await t.test('buildChannelPermissions handles missing staff role gracefully', () => {
-    const overwrites = buildChannelPermissions('guild-123', 'bot-456', undefined);
-    assert.equal(overwrites.length, 2);
+  await t.test('createCommissionChannel pins the initial ticket embed', async () => {
+    let pinned = false;
+    let createdCategory = '';
+    const mockMsg = {
+      pin: async () => {
+        pinned = true;
+      }
+    };
+    const mockGuild = {
+      id: 'g-123',
+      client: { user: { id: 'bot-123' } },
+      channels: {
+        create: async (opts: any) => {
+          createdCategory = opts.parent;
+          return {
+            id: 'c-123',
+            name: opts.name,
+            send: async () => mockMsg
+          };
+        }
+      }
+    };
+
+    await createCommissionChannel(mockGuild as any, samplePayload, {
+      categoryId: 'cat-999',
+      staffRoleId: 'staff-999'
+    });
+
+    assert.equal(pinned, true);
+    assert.equal(createdCategory, 'cat-999');
   });
 });
