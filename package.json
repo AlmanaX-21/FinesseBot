@@ -1,10 +1,12 @@
 {
   "name": "finesse-bot",
   "version": "1.0.0",
+  "type": "module",
   "description": "Soft-coded Discord role assignment bot based on message count and server tenure",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "postinstall": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "test": "tsx --test tests/**/*.test.ts"
