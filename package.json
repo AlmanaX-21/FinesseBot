@@ -2,7 +2,7 @@
   "name": "finesse-bot",
   "version": "1.0.0",
   "type": "module",
-  "description": "Soft-coded Discord role assignment bot based on message count and server tenure",
+  "description": "Discord role assignment, commission ticket, and filesystem response tag bot",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

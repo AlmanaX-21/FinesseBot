@@ -9,6 +9,7 @@ test('addOrUpdateRoleRule adds new rules and updates existing rules', () => {
   const testConfigPath = resolve(process.cwd(), './data/test-config.json');
   const initialConfig: BotConfig = {
     checkIntervalMinutes: 30,
+    tagPrefix: '!',
     roles: [
       { name: 'Starter', roleId: '111', messageCount: 50, timeInServerDays: null }
     ]
@@ -50,6 +51,7 @@ test('removeRoleRule removes rule by roleId or name', () => {
   const testConfigPath = resolve(process.cwd(), './data/test-config-remove.json');
   const initialConfig: BotConfig = {
     checkIntervalMinutes: 60,
+    tagPrefix: '!',
     roles: [
       { name: 'Chatter', roleId: '101', messageCount: 100, timeInServerDays: null },
       { name: 'Elder', roleId: '102', messageCount: null, timeInServerDays: 60 }
@@ -90,6 +92,31 @@ test('loadConfig safely handles empty or partial config files', () => {
   const updated = addOrUpdateRoleRule(rule, testConfigPath);
   assert.equal(updated.roles.length, 1);
   assert.equal(updated.roles[0].name, 'Newbie');
+
+  if (existsSync(testConfigPath)) {
+    rmSync(testConfigPath);
+  }
+});
+
+test('loadConfig defaults missing or invalid tag prefixes', () => {
+  const testConfigPath = resolve(process.cwd(), './data/test-config-prefix-default.json');
+
+  writeFileSync(testConfigPath, JSON.stringify({ tagPrefix: 'bad prefix' }), 'utf-8');
+  assert.equal(loadConfig(testConfigPath).tagPrefix, '!');
+
+  writeFileSync(testConfigPath, '{}', 'utf-8');
+  assert.equal(loadConfig(testConfigPath).tagPrefix, '!');
+
+  if (existsSync(testConfigPath)) {
+    rmSync(testConfigPath);
+  }
+});
+
+test('loadConfig preserves a configured tag prefix', () => {
+  const testConfigPath = resolve(process.cwd(), './data/test-config-prefix-custom.json');
+
+  writeFileSync(testConfigPath, JSON.stringify({ tagPrefix: '??' }), 'utf-8');
+  assert.equal(loadConfig(testConfigPath).tagPrefix, '??');
 
   if (existsSync(testConfigPath)) {
     rmSync(testConfigPath);

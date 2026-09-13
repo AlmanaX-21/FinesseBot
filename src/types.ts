@@ -7,6 +7,7 @@ export interface RoleRule {
 
 export interface BotConfig {
   checkIntervalMinutes: number;
+  tagPrefix: string;
   roles: RoleRule[];
 }
 

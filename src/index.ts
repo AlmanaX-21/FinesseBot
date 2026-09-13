@@ -19,6 +19,8 @@ import {
   handleCloseConfirm,
   handleCloseCancel
 } from './tickets/close-handler.js';
+import { getTagsPath } from './tags/files.js';
+import { createTagHandler } from './tags/handler.js';
 
 dotenv.config();
 if (existsSync('.env.local')) {
@@ -35,12 +37,17 @@ if (!token) {
 const config = loadConfig();
 const store = new MemberStore();
 const ticketDb = getTicketDb();
+const handleTagMessage = createTagHandler({
+  prefix: config.tagPrefix,
+  tagsPath: getTagsPath()
+});
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
   ]
 });
 
@@ -91,7 +98,7 @@ client.once(Events.ClientReady, async readyClient => {
 });
 
 client.on(Events.MessageCreate, async message => {
-  if (message.author.bot || !message.guild) {
+  if (message.author.bot || !message.inGuild()) {
     return;
   }
 
@@ -101,9 +108,14 @@ client.on(Events.MessageCreate, async message => {
   }
 
   const count = store.increment(message.guild.id, message.author.id);
-  await syncMemberRoles(member, config.roles, count).catch(err => {
-    console.warn('[Message Sync Error]:', err);
-  });
+  await Promise.all([
+    syncMemberRoles(member, config.roles, count).catch(err => {
+      console.warn('[Message Sync Error]:', err);
+    }),
+    handleTagMessage(message).catch(err => {
+      console.warn('[Tag Error]:', err);
+    })
+  ]);
 });
 
 client.on(Events.GuildMemberAdd, async member => {

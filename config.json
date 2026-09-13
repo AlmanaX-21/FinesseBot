@@ -1,5 +1,6 @@
 {
   "checkIntervalMinutes": 5,
+  "tagPrefix": "!",
   "roles": [
     {
       "name": "Neophyte",

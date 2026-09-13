@@ -13,6 +13,7 @@ export function loadConfig(customPath?: string): BotConfig {
   if (!existsSync(resolvedPath)) {
     return {
       checkIntervalMinutes: 5,
+      tagPrefix: '!',
       roles: []
     };
   }
@@ -27,6 +28,9 @@ export function loadConfig(customPath?: string): BotConfig {
 
   return {
     checkIntervalMinutes: typeof parsed.checkIntervalMinutes === 'number' ? parsed.checkIntervalMinutes : 5,
+    tagPrefix: typeof parsed.tagPrefix === 'string' && /^\S{1,5}$/u.test(parsed.tagPrefix)
+      ? parsed.tagPrefix
+      : '!',
     roles: Array.isArray(parsed.roles) ? parsed.roles : []
   };
 }
