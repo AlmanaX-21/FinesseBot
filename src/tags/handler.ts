@@ -9,6 +9,7 @@ import {
 export interface TagHandlerOptions {
   prefix: string;
   tagsPath: string;
+  fallbackTagsPath?: string;
   cooldownMs?: number;
 }
 
@@ -82,12 +83,25 @@ function collectAttentionMentions(message: Message<true>, content: string): Atte
   return { text: mentions.join(' '), users, roles };
 }
 
+async function readFirstTag(tagPaths: readonly string[], name: string): Promise<string | null> {
+  for (const tagsPath of tagPaths) {
+    const response = await readTag(tagsPath, name);
+    if (response) return response;
+  }
+  return null;
+}
+
+async function listAllTagNames(tagPaths: readonly string[]): Promise<string[]> {
+  const names = await Promise.all(tagPaths.map(listTagNames));
+  return [...new Set(names.flat())].sort();
+}
+
 async function sendTagList(
   message: Message<true>,
   prefix: string,
-  tagsPath: string
+  tagPaths: readonly string[]
 ): Promise<void> {
-  const names = await listTagNames(tagsPath);
+  const names = await listAllTagNames(tagPaths);
   const content = names.length === 0
     ? 'No tags are configured yet.'
     : `**Available tags (${names.length})**\n${names.map(name => `${prefix}${name}`).join('\n')}`;
@@ -133,6 +147,9 @@ export function createTagHandler(options: TagHandlerOptions) {
   const cooldowns = new Map<string, number>();
   const pendingMembers = new Map<string, Promise<void>>();
   const cooldownMs = options.cooldownMs ?? 5_000;
+  const tagPaths = options.fallbackTagsPath && options.fallbackTagsPath !== options.tagsPath
+    ? [options.tagsPath, options.fallbackTagsPath]
+    : [options.tagsPath];
 
   return async function handleTagMessage(message: Message<true>): Promise<boolean> {
     const invocation = parseTagInvocation(message.content, options.prefix);
@@ -150,11 +167,11 @@ export function createTagHandler(options: TagHandlerOptions) {
 
       if (invocation.name === 'tag-list') {
         cooldowns.set(memberKey, Date.now() + cooldownMs);
-        await sendTagList(message, options.prefix, options.tagsPath);
+        await sendTagList(message, options.prefix, tagPaths);
         return true;
       }
 
-      const response = await readTag(options.tagsPath, invocation.name);
+      const response = await readFirstTag(tagPaths, invocation.name);
       if (!response) {
         return false;
       }

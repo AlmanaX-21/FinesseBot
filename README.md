@@ -30,7 +30,7 @@ If the invocation includes user or role mentions, up to ten unique permitted men
 
 Members can use `!tag-list` to receive an alphabetized list through DMs. If their DMs are closed, the bot posts a short notice in the source channel. The name `tag-list` is reserved.
 
-Set `TAGS_PATH` to use a directory other than `./tags`. Prefix changes require a bot restart.
+Set `TAGS_PATH` to give a live directory priority over `./tags`; tags absent there fall back to the deployed `./tags` files. Prefix changes require a bot restart.
 
 ## Discord setup
 

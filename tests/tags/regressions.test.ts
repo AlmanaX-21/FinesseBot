@@ -17,13 +17,15 @@ interface CapturedPayload {
 
 function createMessage(content: string, users: string[] = [], dmError?: Error) {
   const channelMessages: CapturedPayload[] = [];
+  const directMessages: CapturedPayload[] = [];
   const message = {
     content,
     guildId: 'guild-1',
     author: {
       id: 'user-1',
-      send: async () => {
+      send: async (payload: CapturedPayload) => {
         if (dmError) throw dmError;
+        directMessages.push(payload);
       }
     },
     channel: {
@@ -38,7 +40,7 @@ function createMessage(content: string, users: string[] = [], dmError?: Error) {
     }
   } as unknown as Message<true>;
 
-  return { message, channelMessages };
+  return { message, channelMessages, directMessages };
 }
 
 test('stored mentions stay disabled when the attention footer uses the same ID', async () => {
@@ -102,6 +104,54 @@ test('an in-flight unknown tag does not discard the next valid invocation', asyn
     assert.equal(valid.channelMessages.length, 1);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('release tags answer when the live tag directory lacks them', async () => {
+  const liveDirectory = await mkdtemp(join(tmpdir(), 'finesse-live-tags-'));
+  const releaseDirectory = await mkdtemp(join(tmpdir(), 'finesse-release-tags-'));
+
+  try {
+    await writeFile(join(releaseDirectory, 'tutorials.md'), 'Tutorial links', 'utf-8');
+    const fixture = createMessage('!tutorials');
+    const options = {
+      prefix: '!',
+      tagsPath: liveDirectory,
+      fallbackTagsPath: releaseDirectory
+    };
+    const handleTagMessage = createTagHandler(options);
+
+    assert.equal(await handleTagMessage(fixture.message), true);
+    assert.equal(fixture.channelMessages[0].content, 'Tutorial links');
+  } finally {
+    await Promise.all([
+      rm(liveDirectory, { recursive: true, force: true }),
+      rm(releaseDirectory, { recursive: true, force: true })
+    ]);
+  }
+});
+
+test('tag-list includes release tags missing from the live directory', async () => {
+  const liveDirectory = await mkdtemp(join(tmpdir(), 'finesse-live-tag-list-'));
+  const releaseDirectory = await mkdtemp(join(tmpdir(), 'finesse-release-tag-list-'));
+
+  try {
+    await writeFile(join(releaseDirectory, 'scaling.md'), 'Scaling guide', 'utf-8');
+    const fixture = createMessage('!tag-list');
+    const options = {
+      prefix: '!',
+      tagsPath: liveDirectory,
+      fallbackTagsPath: releaseDirectory
+    };
+    const handleTagMessage = createTagHandler(options);
+
+    assert.equal(await handleTagMessage(fixture.message), true);
+    assert.match(fixture.directMessages[0].content, /!scaling/u);
+  } finally {
+    await Promise.all([
+      rm(liveDirectory, { recursive: true, force: true }),
+      rm(releaseDirectory, { recursive: true, force: true })
+    ]);
   }
 });
 

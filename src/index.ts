@@ -39,7 +39,8 @@ const store = new MemberStore();
 const ticketDb = getTicketDb();
 const handleTagMessage = createTagHandler({
   prefix: config.tagPrefix,
-  tagsPath: getTagsPath()
+  tagsPath: getTagsPath(),
+  fallbackTagsPath: getTagsPath('./tags')
 });
 
 const client = new Client({

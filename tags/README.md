@@ -85,7 +85,7 @@ The shared prefix is `tagPrefix` in the root `config.json` file:
 
 The prefix must contain one to five characters without spaces. Restart the bot after changing it.
 
-The `TAGS_PATH` environment variable can point the bot to another tag directory. It defaults to `./tags`.
+The `TAGS_PATH` environment variable can point the bot to a live tag directory. Tags absent there fall back to the deployed `./tags` files.
 
 ## Troubleshooting
 
