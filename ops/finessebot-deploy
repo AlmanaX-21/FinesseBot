@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+deploy_root="${FINESSEBOT_ROOT:-/opt/finessebot}"
+service_name="${FINESSEBOT_SERVICE:-finessebot}"
+service_user="${FINESSEBOT_USER:-finessebot}"
+health_url="${FINESSEBOT_HEALTH_URL:-http://127.0.0.1:3000/health}"
+releases_dir="$deploy_root/releases"
+current_link="$deploy_root/current"
+next_link="$deploy_root/current.next"
+
+read -r action revision run_id attempt extra <<< "${SSH_ORIGINAL_COMMAND:-}"
+
+if [[ "$action" != "deploy" || ! "$revision" =~ ^[0-9a-f]{40}$ || ! "$run_id" =~ ^[0-9]+$ || ! "$attempt" =~ ^[0-9]+$ || -n "${extra:-}" ]]; then
+  echo "Expected: deploy <sha> <run-id> <attempt>" >&2
+  exit 64
+fi
+
+mkdir -p "$releases_dir"
+exec 9>"$deploy_root/.deploy.lock"
+flock -n 9 || {
+  echo "Another deployment is running" >&2
+  exit 75
+}
+
+if [[ -d "$current_link" && ! -L "$current_link" ]]; then
+  legacy_release="$releases_dir/pre-workflow-$(date -u +%Y%m%d%H%M%S)"
+  mv -- "$current_link" "$legacy_release"
+  ln -s "$legacy_release" "$current_link"
+fi
+
+previous_release="$(readlink -f "$current_link" 2>/dev/null || true)"
+if [[ -z "$previous_release" || ! -d "$previous_release" ]]; then
+  echo "Current release is missing" >&2
+  exit 66
+fi
+
+release_id="$revision-$run_id-$attempt"
+release_dir="$releases_dir/$release_id"
+if [[ -e "$release_dir" ]]; then
+  echo "Release already exists: $release_id" >&2
+  exit 73
+fi
+
+mkdir "$release_dir"
+chown "$service_user:$service_user" "$release_dir"
+deployed=0
+
+cleanup_failed_release() {
+  if [[ "$deployed" != "1" ]]; then
+    rm -f -- "$next_link"
+    rm -rf -- "$release_dir"
+  fi
+}
+
+trap cleanup_failed_release EXIT
+
+runuser -u "$service_user" -- tar -xzf - --no-same-owner -C "$release_dir"
+runuser -u "$service_user" -- npm ci --prefix "$release_dir"
+test -s "$release_dir/dist/index.js"
+runuser -u "$service_user" -- npm prune --omit=dev --ignore-scripts --prefix "$release_dir"
+
+ln -s "$release_dir" "$next_link"
+mv -Tf "$next_link" "$current_link"
+
+if systemctl restart "$service_name" && curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 2 "$health_url" >/dev/null; then
+  deployed=1
+  trap - EXIT
+  echo "Deployed $revision"
+  exit 0
+fi
+
+ln -s "$previous_release" "$next_link"
+mv -Tf "$next_link" "$current_link"
+systemctl restart "$service_name" || true
+echo "Deployment failed; restored $previous_release" >&2
+exit 1

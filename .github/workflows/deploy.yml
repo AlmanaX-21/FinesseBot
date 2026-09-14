@@ -1,0 +1,78 @@
+name: Deploy FinesseBot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finessebot-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require master
+        if: github.ref != 'refs/heads/master'
+        run: |
+          echo "::error::Run this workflow from master."
+          exit 1
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: Production
+      url: https://tickets.almanax21.com/health
+    env:
+      DEPLOY_HOST: 129.121.141.212
+      DEPLOY_PORT: '22'
+      DEPLOY_USER: root
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Create release archive
+        run: git archive --format=tar.gz --output="$RUNNER_TEMP/finessebot.tar.gz" "$GITHUB_SHA"
+      - name: Prepare SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.BLUEHOST_DEPLOY_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.BLUEHOST_KNOWN_HOSTS }}
+        run: |
+          if [[ -z "$DEPLOY_KEY" || -z "$DEPLOY_KNOWN_HOSTS" ]]; then
+            echo "::error::Production deployment secrets are missing."
+            exit 1
+          fi
+          printf '%s\n' "$DEPLOY_KEY" | tr -d '\r' > "$RUNNER_TEMP/finessebot-deploy-key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$RUNNER_TEMP/finessebot-known-hosts"
+          chmod 600 "$RUNNER_TEMP/finessebot-deploy-key" "$RUNNER_TEMP/finessebot-known-hosts"
+      - name: Deploy release
+        run: |
+          ssh \
+            -i "$RUNNER_TEMP/finessebot-deploy-key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/finessebot-known-hosts" \
+            -p "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "deploy $GITHUB_SHA $GITHUB_RUN_ID $GITHUB_RUN_ATTEMPT" \
+            < "$RUNNER_TEMP/finessebot.tar.gz"
+      - name: Verify public health
+        run: curl --fail --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 https://tickets.almanax21.com/health
