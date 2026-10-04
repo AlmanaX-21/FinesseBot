@@ -36,6 +36,15 @@ test('reposForTags returns one repo per mod tag', () => {
   );
 });
 
+test('reposForTags deduplicates tags that share a repo', () => {
+  const shared: IssueForum = {
+    ...forum,
+    repos: { LN: 'AlmanaX-21/LogisticsNetworks', Logistics: 'AlmanaX-21/LogisticsNetworks' }
+  };
+
+  assert.deepEqual(reposForTags(shared, ['LN', 'Logistics']), ['AlmanaX-21/LogisticsNetworks']);
+});
+
 test('reposForTags returns nothing without a mod tag', () => {
   assert.deepEqual(reposForTags(forum, ['bugs']), []);
 });
