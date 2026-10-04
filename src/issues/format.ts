@@ -14,7 +14,7 @@ function escapeBrackets(text: string): string {
   return text.replace(/[[\]\\]/gu, '\\$&');
 }
 
-export function neutralizeMentions(text: string): string {
+function neutralizeMentions(text: string): string {
   return text.replace(/@/gu, '@\u200B');
 }
 
