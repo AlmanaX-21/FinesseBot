@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import { AnyThreadChannel, ChannelType, Message, MessageFlags } from 'discord.js';
+import { AnyThreadChannel, ChannelType, ForumChannel, Message, MessageFlags } from 'discord.js';
 import { Database as DatabaseInstance } from 'better-sqlite3';
 import { IssueForum } from '../types.js';
 import { getLinkedIssues, saveLinkedIssue } from './database.js';
@@ -17,6 +17,12 @@ interface IssueSyncOptions {
 export function tagsChanged(before: AnyThreadChannel, after: AnyThreadChannel): boolean {
   return before.appliedTags.length !== after.appliedTags.length
     || before.appliedTags.some(id => !after.appliedTags.includes(id));
+}
+
+function appliedTagNames(thread: AnyThreadChannel, parent: ForumChannel): string[] {
+  return parent.availableTags
+    .filter(tag => thread.appliedTags.includes(tag.id))
+    .map(tag => tag.name);
 }
 
 async function fetchStarterMessage(
@@ -45,7 +51,7 @@ function toForumPost(thread: AnyThreadChannel, message: Message<true>, tagNames:
 
 async function createIssues(
   options: IssueSyncOptions,
-  threadId: string,
+  thread: AnyThreadChannel,
   repos: string[],
   draft: IssueDraft
 ): Promise<{ created: LinkedIssue[]; errors: string[] }> {
@@ -55,7 +61,7 @@ async function createIssues(
   for (const repo of repos) {
     try {
       const issue = await createIssue(options.token, repo, draft);
-      saveLinkedIssue(options.db, threadId, issue);
+      saveLinkedIssue(options.db, thread.id, issue);
       created.push(issue);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -64,6 +70,9 @@ async function createIssues(
     }
   }
 
+  if (created.length > 0) {
+    await announceIssues(thread, created).catch(err => console.warn('[Issue Reply Error]:', err));
+  }
   return { created, errors };
 }
 
@@ -86,9 +95,7 @@ export function createIssueSync(options: IssueSyncOptions): IssueSync {
       return { status: 'untracked' };
     }
 
-    const tagNames = parent.availableTags
-      .filter(tag => thread.appliedTags.includes(tag.id))
-      .map(tag => tag.name);
+    const tagNames = appliedTagNames(thread, parent);
     const repos = reposForTags(forum, tagNames);
     if (repos.length === 0) {
       return { status: 'untagged' };
@@ -96,22 +103,19 @@ export function createIssueSync(options: IssueSyncOptions): IssueSync {
 
     const existing = getLinkedIssues(options.db, thread.id);
     const missing = repos.filter(repo => !existing.some(issue => issue.repo === repo));
-    const keys = missing.map(repo => `${thread.id}:${repo}`);
-    if (keys.some(key => inFlight.has(key))) {
-      return { status: 'busy' };
-    }
-    if (missing.length === 0) {
-      return { status: 'synced', created: [], existing, errors: [] };
+    const pending = missing.filter(repo => !inFlight.has(`${thread.id}:${repo}`));
+    if (pending.length === 0) {
+      return missing.length > 0
+        ? { status: 'busy' }
+        : { status: 'synced', created: [], existing, errors: [] };
     }
 
+    const keys = pending.map(repo => `${thread.id}:${repo}`);
     keys.forEach(key => inFlight.add(key));
     try {
       const message = await fetchStarterMessage(thread, retryDelayMs);
       const draft = buildIssueDraft(forum, toForumPost(thread, message, tagNames));
-      const { created, errors } = await createIssues(options, thread.id, missing, draft);
-      if (created.length > 0) {
-        await announceIssues(thread, created).catch(err => console.warn('[Issue Reply Error]:', err));
-      }
+      const { created, errors } = await createIssues(options, thread, pending, draft);
       return { status: 'synced', created, existing, errors };
     } finally {
       keys.forEach(key => inFlight.delete(key));

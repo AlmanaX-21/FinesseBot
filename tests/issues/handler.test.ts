@@ -192,6 +192,38 @@ test('Forum issue sync', async (t) => {
     assert.equal((await first).status, 'synced');
   });
 
+  await t.test('syncs a mod tag added while another repo is in flight', async () => {
+    stubGitHub();
+    const { db, syncForumPost } = createSync();
+    let releaseStarter: () => void = () => undefined;
+    const starterReady = new Promise<void>(resolve => {
+      releaseStarter = resolve;
+    });
+    let gated = true;
+    const { thread } = createThreadFixture({
+      appliedTags: ['tag-ln'],
+      fetchStarterMessage: async () => {
+        if (gated) {
+          gated = false;
+          await starterReady;
+        }
+        return starterMessage;
+      }
+    });
+
+    const first = syncForumPost(thread);
+    thread.appliedTags.push('tag-om');
+    const second = await syncForumPost(thread);
+    releaseStarter();
+    await first;
+
+    assert.equal(second.status, 'synced');
+    assert.deepEqual(
+      getLinkedIssues(db, 'thread-1').map(issue => issue.repo).sort(),
+      ['AlmanaX-21/LogisticsNetworks', 'AlmanaX-21/OtherMod']
+    );
+  });
+
   await t.test('retries the starter message before creating the issue', async () => {
     const requests = stubGitHub();
     const { syncForumPost } = createSync();
