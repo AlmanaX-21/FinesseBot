@@ -19,7 +19,11 @@ export async function createIssue(
       'Content-Type': 'application/json',
       'User-Agent': 'FinesseBot'
     },
-    body: JSON.stringify(draft)
+    body: JSON.stringify(draft),
+    signal: AbortSignal.timeout(30_000)
+  }).catch((error: Error) => {
+    const reason = error.cause instanceof Error ? error.cause.message : error.name;
+    throw new Error(`GitHub request failed for ${repo}: ${reason}`);
   });
   const data = await response.json().catch(() => ({})) as GitHubIssueResponse;
 

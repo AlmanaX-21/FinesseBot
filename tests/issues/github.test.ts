@@ -36,6 +36,7 @@ test('GitHub issue client', async (t) => {
     });
     assert.equal(requests[0].url, 'https://api.github.com/repos/AlmanaX-21/LogisticsNetworks/issues');
     assert.equal(requests[0].init.method, 'POST');
+    assert.ok(requests[0].init.signal instanceof AbortSignal);
     const headers = requests[0].init.headers as Record<string, string>;
     assert.equal(headers.Authorization, 'Bearer token-1');
     assert.equal(headers.Accept, 'application/vnd.github+json');
@@ -55,5 +56,16 @@ test('GitHub issue client', async (t) => {
     stubFetch(() => new Response('upstream down', { status: 502, statusText: 'Bad Gateway' }));
 
     await assert.rejects(createIssue('token-1', repo, draft), /GitHub 502 .*: Bad Gateway/);
+  });
+
+  await t.test('names the repo and cause when the request fails', async () => {
+    stubFetch(() => {
+      throw new TypeError('fetch failed', { cause: new Error('getaddrinfo ENOTFOUND api.github.com') });
+    });
+
+    await assert.rejects(
+      createIssue('token-1', repo, draft),
+      /GitHub request failed for AlmanaX-21\/LogisticsNetworks: getaddrinfo ENOTFOUND api\.github\.com/
+    );
   });
 });
