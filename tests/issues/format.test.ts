@@ -67,6 +67,12 @@ test('buildIssueDraft escapes brackets in link text', () => {
   assert.equal(draft.title, 'Crash [1.12.0]');
 });
 
+test('buildIssueDraft escapes backslashes in link text', () => {
+  const draft = buildIssueDraft(forum, { ...post, title: 'Crash\\' });
+
+  assert.ok(draft.body.includes('[Crash\\\\](https://discord.com/channels/guild-1/thread-1)'));
+});
+
 test('issueLink formats a markdown link', () => {
   assert.equal(
     issueLink({
