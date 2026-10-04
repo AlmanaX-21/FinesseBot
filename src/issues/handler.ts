@@ -29,13 +29,17 @@ async function fetchStarterMessage(
   thread: AnyThreadChannel,
   retryDelayMs: number
 ): Promise<Message<true>> {
+  let lastError: unknown;
   // Starter may lag thread creation
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await sleep(retryDelayMs);
-    const message = await thread.fetchStarterMessage().catch(() => null);
+    const message = await thread.fetchStarterMessage().catch(error => {
+      lastError = error;
+      return null;
+    });
     if (message) return message;
   }
-  throw new Error('Starter message unavailable for this post.');
+  throw new Error('Starter message unavailable for this post.', { cause: lastError });
 }
 
 function toForumPost(thread: AnyThreadChannel, message: Message<true>, tagNames: string[]): ForumPost {

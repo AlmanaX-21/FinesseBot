@@ -252,6 +252,24 @@ test('Forum issue sync', async (t) => {
     await assert.rejects(syncForumPost(thread), /Starter message unavailable/);
     assert.equal(requests.length, 0);
   });
+
+  await t.test('keeps the Discord error as the cause when the starter fetch fails', async () => {
+    stubGitHub();
+    const { syncForumPost } = createSync();
+    const unknownMessage = new Error('Unknown Message');
+    const { thread } = createThreadFixture({
+      appliedTags: ['tag-ln'],
+      fetchStarterMessage: async () => {
+        throw unknownMessage;
+      }
+    });
+
+    await assert.rejects(syncForumPost(thread), (error: Error) => {
+      assert.match(error.message, /Starter message unavailable/);
+      assert.equal(error.cause, unknownMessage);
+      return true;
+    });
+  });
 });
 
 test('tagsChanged ignores order and detects additions and swaps', () => {
