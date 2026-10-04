@@ -31,11 +31,14 @@ const starterMessage = {
 interface SentPayload {
   content: string;
   flags?: number;
+  allowedMentions?: { parse: string[] };
 }
 
 interface ThreadFixtureOptions {
   appliedTags: string[];
   parentId?: string;
+  parentType?: ChannelType;
+  sendFails?: boolean;
   fetchStarterMessage?: () => Promise<unknown>;
 }
 
@@ -46,10 +49,11 @@ function createThreadFixture(options: ThreadFixtureOptions) {
     name: 'Option to switch straight line connection hints',
     url: 'https://discord.com/channels/guild-1/thread-1',
     parentId: options.parentId ?? 'forum-1',
-    parent: { type: ChannelType.GuildForum, availableTags },
+    parent: { type: options.parentType ?? ChannelType.GuildForum, availableTags },
     appliedTags: options.appliedTags,
     fetchStarterMessage: options.fetchStarterMessage ?? (async () => starterMessage),
     send: async (payload: SentPayload) => {
+      if (options.sendFails) throw new Error('Missing Permissions');
       sent.push(payload);
     }
   } as unknown as AnyThreadChannel;
@@ -97,6 +101,15 @@ test('Forum issue sync', async (t) => {
     assert.equal(requests.length, 0);
   });
 
+  await t.test('ignores configured channels that are not forums', async () => {
+    const requests = stubGitHub();
+    const { syncForumPost } = createSync();
+    const { thread } = createThreadFixture({ appliedTags: ['tag-ln'], parentType: ChannelType.GuildText });
+
+    assert.deepEqual(await syncForumPost(thread), { status: 'untracked' });
+    assert.equal(requests.length, 0);
+  });
+
   await t.test('waits for a mod tag', async () => {
     const requests = stubGitHub();
     const { syncForumPost } = createSync();
@@ -127,6 +140,7 @@ test('Forum issue sync', async (t) => {
       '📌 Tracked on GitHub: [AlmanaX-21/OtherMod#2](https://github.com/AlmanaX-21/OtherMod/issues/2)'
     ].join('\n'));
     assert.equal(sent[0].flags, MessageFlags.SuppressEmbeds);
+    assert.deepEqual(sent[0].allowedMentions, { parse: [] });
   });
 
   await t.test('skips repos that are already linked', async () => {
@@ -269,6 +283,18 @@ test('Forum issue sync', async (t) => {
       assert.equal(error.cause, unknownMessage);
       return true;
     });
+  });
+
+  await t.test('keeps created issues when the thread reply fails', async () => {
+    stubGitHub();
+    const { db, syncForumPost } = createSync();
+    const { thread } = createThreadFixture({ appliedTags: ['tag-ln'], sendFails: true });
+
+    const result = await syncForumPost(thread);
+
+    assert.ok(result.status === 'synced');
+    assert.equal(result.created.length, 1);
+    assert.equal(getLinkedIssues(db, 'thread-1').length, 1);
   });
 });
 
