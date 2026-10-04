@@ -36,13 +36,13 @@ export function createIssueCommand(syncForumPost: IssueSync | null) {
         return;
       }
 
-      const thread = interaction.channel;
+      await interaction.deferReply({ ephemeral: true });
+      const thread = await interaction.client.channels.fetch(interaction.channelId);
       if (!thread?.isThread()) {
-        await interaction.reply({ content: STATUS_MESSAGES.untracked, ephemeral: true });
+        await interaction.editReply({ content: STATUS_MESSAGES.untracked });
         return;
       }
 
-      await interaction.deferReply({ ephemeral: true });
       const result = await syncForumPost(thread);
       await interaction.editReply({ content: describeResult(result) });
     }

@@ -9,11 +9,12 @@ interface ReplyPayload {
   ephemeral?: boolean;
 }
 
-function createInteraction(isThread = true) {
+function createInteraction(channel: unknown = { isThread: () => true }) {
   const replies: ReplyPayload[] = [];
   let deferredEphemeral = false;
   const interaction = {
-    channel: { isThread: () => isThread },
+    channelId: 'thread-1',
+    client: { channels: { fetch: async () => channel } },
     reply: async (payload: ReplyPayload) => {
       replies.push(payload);
     },
@@ -43,10 +44,30 @@ test('Issue slash command', async (t) => {
   });
 
   await t.test('rejects channels that are not forum posts', async () => {
-    const { interaction, replies } = createInteraction(false);
+    const { interaction, replies, wasDeferredEphemeral } = createInteraction({ isThread: () => false });
     await createIssueCommand(syncReturning({ status: 'synced', created: [], existing: [], errors: [] }))
       .execute(interaction);
-    assert.deepEqual(replies, [{ content: '⚠️ Run this inside a post in a tracked forum.', ephemeral: true }]);
+    assert.equal(wasDeferredEphemeral(), true);
+    assert.deepEqual(replies, [{ content: '⚠️ Run this inside a post in a tracked forum.' }]);
+  });
+
+  await t.test('syncs the post fetched by channel id', async () => {
+    const post = { isThread: () => true };
+    const { interaction } = createInteraction(post);
+    let synced: unknown;
+
+    await createIssueCommand(async thread => {
+      synced = thread;
+      return { status: 'untagged' };
+    }).execute(interaction);
+
+    assert.equal(synced, post);
+  });
+
+  await t.test('treats unknown channels as untracked', async () => {
+    const { interaction, replies } = createInteraction(null);
+    await createIssueCommand(syncReturning({ status: 'untagged' })).execute(interaction);
+    assert.deepEqual(replies, [{ content: '⚠️ Run this inside a post in a tracked forum.' }]);
   });
 
   await t.test('explains untagged posts', async () => {
