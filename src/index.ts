@@ -21,6 +21,9 @@ import {
 } from './tickets/close-handler.js';
 import { getTagsPath } from './tags/files.js';
 import { createTagHandler } from './tags/handler.js';
+import { initIssueDb } from './issues/database.js';
+import { createIssueSync, tagsChanged } from './issues/handler.js';
+import { createIssueCommand } from './commands/issue.js';
 
 dotenv.config();
 if (existsSync('.env.local')) {
@@ -42,6 +45,15 @@ const handleTagMessage = createTagHandler({
   tagsPath: getTagsPath(),
   fallbackTagsPath: getTagsPath('./tags')
 });
+initIssueDb(ticketDb);
+const githubToken = process.env.GITHUB_TOKEN?.trim();
+if (!githubToken) {
+  console.warn('GITHUB_TOKEN is not set; forum issue sync is disabled');
+}
+const syncForumPost = githubToken
+  ? createIssueSync({ db: ticketDb, token: githubToken, forums: config.issueForums })
+  : null;
+const botCommands = [...commands, createIssueCommand(syncForumPost)];
 
 const client = new Client({
   intents: [
@@ -55,7 +67,7 @@ const client = new Client({
 async function registerSlashCommands(appId: string): Promise<void> {
   try {
     const rest = new REST({ version: '10' }).setToken(token!);
-    const body = commands.map(c => c.data.toJSON());
+    const body = botCommands.map(c => c.data.toJSON());
 
     if (guildId && guildId.trim().length > 0) {
       await rest.put(Routes.applicationGuildCommands(appId, guildId), { body });
@@ -129,9 +141,21 @@ client.on(Events.GuildMemberAdd, async member => {
   });
 });
 
+client.on(Events.ThreadCreate, async (thread, newlyCreated) => {
+  if (newlyCreated && syncForumPost) {
+    await syncForumPost(thread).catch(err => console.error('[Issue Error]:', err));
+  }
+});
+
+client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
+  if (syncForumPost && tagsChanged(oldThread, newThread)) {
+    await syncForumPost(newThread).catch(err => console.error('[Issue Error]:', err));
+  }
+});
+
 client.on(Events.InteractionCreate, async interaction => {
   if (interaction.isChatInputCommand()) {
-    const command = commands.find(c => c.data.name === interaction.commandName);
+    const command = botCommands.find(c => c.data.name === interaction.commandName);
     if (!command) {
       return;
     }
