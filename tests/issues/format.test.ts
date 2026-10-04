@@ -63,7 +63,7 @@ test('buildIssueDraft handles posts without text or attachments', () => {
 test('buildIssueDraft escapes brackets in link text', () => {
   const draft = buildIssueDraft(forum, { ...post, title: 'Crash [1.12.0]' });
 
-  assert.ok(draft.body.includes('[Crash \[1.12.0\]](https://discord.com/channels/guild-1/thread-1)'));
+  assert.ok(draft.body.includes('[Crash \\[1.12.0\\]](https://discord.com/channels/guild-1/thread-1)'));
   assert.equal(draft.title, 'Crash [1.12.0]');
 });
 

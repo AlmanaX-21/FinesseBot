@@ -11,7 +11,7 @@ function mapTags(mapping: Record<string, string>, tagNames: string[]): string[] 
 }
 
 function escapeBrackets(text: string): string {
-  return text.replace(/[[\]]/gu, '\$&');
+  return text.replace(/[[\]]/gu, '\\$&');
 }
 
 export function neutralizeMentions(text: string): string {
