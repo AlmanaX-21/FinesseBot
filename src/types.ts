@@ -5,10 +5,17 @@ export interface RoleRule {
   timeInServerDays?: number | null;
 }
 
+export interface IssueForum {
+  channelId: string;
+  repos: Record<string, string>;
+  labels: Record<string, string>;
+}
+
 export interface BotConfig {
   checkIntervalMinutes: number;
   tagPrefix: string;
   roles: RoleRule[];
+  issueForums: IssueForum[];
 }
 
 export interface MemberStats {

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rmSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { rmSync, writeFileSync, existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { loadConfig, addOrUpdateRoleRule, removeRoleRule } from '../src/config.js';
 import { BotConfig, RoleRule } from '../src/types.js';
 
@@ -121,4 +122,52 @@ test('loadConfig preserves a configured tag prefix', () => {
   if (existsSync(testConfigPath)) {
     rmSync(testConfigPath);
   }
+});
+
+function writeTempConfig(content: unknown): string {
+  const path = join(mkdtempSync(join(tmpdir(), 'finesse-config-')), 'config.json');
+  writeFileSync(path, JSON.stringify(content), 'utf-8');
+  return path;
+}
+
+test('loadConfig parses issue forums and drops invalid entries', () => {
+  const path = writeTempConfig({
+    issueForums: [
+      {
+        channelId: 'forum-1',
+        repos: {
+          LogisticsNetworks: 'AlmanaX-21/LogisticsNetworks',
+          Broken: 'not-a-repo',
+          Numeric: 5
+        },
+        labels: { bugs: 'bug', feature: 'enhancement' }
+      },
+      { repos: { Other: 'AlmanaX-21/Other' } },
+      'garbage'
+    ]
+  });
+
+  assert.deepEqual(loadConfig(path).issueForums, [
+    {
+      channelId: 'forum-1',
+      repos: { LogisticsNetworks: 'AlmanaX-21/LogisticsNetworks' },
+      labels: { bugs: 'bug', feature: 'enhancement' }
+    }
+  ]);
+});
+
+test('loadConfig defaults issue forums to an empty list', () => {
+  assert.deepEqual(loadConfig(writeTempConfig({})).issueForums, []);
+  assert.deepEqual(loadConfig(join(tmpdir(), 'finesse-missing-config.json')).issueForums, []);
+});
+
+test('saving role rules keeps issue forums', () => {
+  const issueForums = [
+    { channelId: 'forum-1', repos: { Mod: 'AlmanaX-21/Mod' }, labels: {} }
+  ];
+  const path = writeTempConfig({ roles: [], issueForums });
+
+  addOrUpdateRoleRule({ name: 'Starter', roleId: '1', messageCount: 5, timeInServerDays: null }, path);
+
+  assert.deepEqual(loadConfig(path).issueForums, issueForums);
 });

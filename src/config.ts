@@ -1,6 +1,35 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { BotConfig, RoleRule } from './types.js';
+import { BotConfig, IssueForum, RoleRule } from './types.js';
+
+const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/u;
+
+function stringEntries(
+  value: unknown,
+  isValid: (entry: string) => boolean = () => true
+): Record<string, string> {
+  if (typeof value !== 'object' || value === null) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string' && isValid(entry[1])
+    )
+  );
+}
+
+function parseIssueForums(value: unknown): IssueForum[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter(entry => typeof entry?.channelId === 'string' && entry.channelId.length > 0)
+    .map(entry => ({
+      channelId: entry.channelId,
+      repos: stringEntries(entry.repos, repo => REPO_PATTERN.test(repo)),
+      labels: stringEntries(entry.labels)
+    }));
+}
 
 export function getConfigPath(customPath?: string): string {
   const targetPath = customPath || process.env.CONFIG_PATH || './config.json';
@@ -14,7 +43,8 @@ export function loadConfig(customPath?: string): BotConfig {
     return {
       checkIntervalMinutes: 5,
       tagPrefix: '!',
-      roles: []
+      roles: [],
+      issueForums: []
     };
   }
 
@@ -31,7 +61,8 @@ export function loadConfig(customPath?: string): BotConfig {
     tagPrefix: typeof parsed.tagPrefix === 'string' && /^\S{1,5}$/u.test(parsed.tagPrefix)
       ? parsed.tagPrefix
       : '!',
-    roles: Array.isArray(parsed.roles) ? parsed.roles : []
+    roles: Array.isArray(parsed.roles) ? parsed.roles : [],
+    issueForums: parseIssueForums(parsed.issueForums)
   };
 }
 
