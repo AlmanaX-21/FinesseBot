@@ -8,6 +8,7 @@ A Discord bot for activity roles, commission tickets, and editable response tags
 - Receives commission requests from the portfolio ticket API.
 - Lets clients claim and staff close private commission channels.
 - Serves Discord Markdown responses from editable tag files.
+- Turns tagged forum posts into GitHub issues in each mod's repository.
 
 ## Filesystem tags
 
@@ -31,6 +32,33 @@ If the invocation includes user or role mentions, up to ten unique permitted men
 Members can use `!tag-list` to receive an alphabetized list through DMs. If their DMs are closed, the bot posts a short notice in the source channel. The name `tag-list` is reserved.
 
 Set `TAGS_PATH` to give a live directory priority over `./tags`; tags absent there fall back to the deployed `./tags` files. Prefix changes require a bot restart.
+
+## Forum GitHub issues
+
+Posts in configured forum channels become GitHub issues in the repository of each mod tag applied to them. Type tags such as `bugs` and `feature` become issue labels. The bot replies in the post with the issue link.
+
+Add an `issueForums` entry to `config.json` for each forum channel:
+
+```json
+"issueForums": [
+  {
+    "channelId": "123456789012345678",
+    "repos": { "LogisticsNetworks": "AlmanaX-21/LogisticsNetworks" },
+    "labels": { "bugs": "bug", "feature": "enhancement" }
+  }
+]
+```
+
+`repos` and `labels` keys are forum tag names, matched case-insensitively. Labels must already exist in each repository. After renaming a forum tag, update `config.json` and restart the bot.
+
+- A new post creates one issue per mod tag. Posts without a mod tag wait until one is added.
+- Adding a mod tag to an existing post creates the missing issue. Removing or changing a tag leaves existing issues in place.
+- `/issue` runs the same sync inside a post. Use it for archived posts or to retry after a GitHub error. It requires Manage Threads by default.
+- Automatic sync failures are logged, not posted in the thread.
+
+Set `GITHUB_TOKEN` to a fine-grained personal access token with access to each mod repository and the **Issues: Read and write** permission. Without it, sync is disabled. On the VPS, add the token to `/etc/finessebot/environment` and `issueForums` to `/var/lib/finessebot/config.json`, then restart the service.
+
+The bot needs View Channel, Send Messages in Posts and Read Message History in each tracked forum. Enable the forum's **Require Tags** setting so posts arrive tagged; Discord cannot require a mod tag specifically. Repeated `GitHub 401` errors in the logs mean the token has expired.
 
 ## Discord setup
 
