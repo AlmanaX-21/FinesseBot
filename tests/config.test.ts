@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { rmSync, writeFileSync, existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,8 @@ test('addOrUpdateRoleRule adds new rules and updates existing rules', () => {
     tagPrefix: '!',
     roles: [
       { name: 'Starter', roleId: '111', messageCount: 50, timeInServerDays: null }
-    ]
+    ],
+    issueForums: []
   };
 
   writeFileSync(testConfigPath, JSON.stringify(initialConfig, null, 2), 'utf-8');
@@ -56,7 +57,8 @@ test('removeRoleRule removes rule by roleId or name', () => {
     roles: [
       { name: 'Chatter', roleId: '101', messageCount: 100, timeInServerDays: null },
       { name: 'Elder', roleId: '102', messageCount: null, timeInServerDays: 60 }
-    ]
+    ],
+    issueForums: []
   };
 
   writeFileSync(testConfigPath, JSON.stringify(initialConfig, null, 2), 'utf-8');
@@ -124,8 +126,13 @@ test('loadConfig preserves a configured tag prefix', () => {
   }
 });
 
+const tempDirs: string[] = [];
+after(() => tempDirs.forEach(dir => rmSync(dir, { recursive: true, force: true })));
+
 function writeTempConfig(content: unknown): string {
-  const path = join(mkdtempSync(join(tmpdir(), 'finesse-config-')), 'config.json');
+  const dir = mkdtempSync(join(tmpdir(), 'finesse-config-'));
+  tempDirs.push(dir);
+  const path = join(dir, 'config.json');
   writeFileSync(path, JSON.stringify(content), 'utf-8');
   return path;
 }
@@ -138,6 +145,7 @@ test('loadConfig parses issue forums and drops invalid entries', () => {
         repos: {
           LogisticsNetworks: 'AlmanaX-21/LogisticsNetworks',
           Broken: 'not-a-repo',
+          Traversal: '../..',
           Numeric: 5
         },
         labels: { bugs: 'bug', feature: 'enhancement' }

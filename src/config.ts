@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BotConfig, IssueForum, RoleRule } from './types.js';
 
-const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/u;
+const REPO_PATTERN = /^[\w-]+\/(?!\.{1,2}$)[\w.-]+$/u;
 
 function stringEntries(
   value: unknown,
