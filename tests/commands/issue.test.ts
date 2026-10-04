@@ -78,6 +78,24 @@ test('Issue slash command', async (t) => {
     assert.deepEqual(replies, [{ content: '⚠️ Add a mod tag to this post first.', flags: MessageFlags.SuppressEmbeds }]);
   });
 
+  await t.test('explains busy posts', async () => {
+    const { interaction, replies } = createInteraction();
+    await createIssueCommand(syncReturning({ status: 'busy' })).execute(interaction);
+    assert.deepEqual(replies, [{
+      content: '⏳ Issue creation is already in progress for this post.',
+      flags: MessageFlags.SuppressEmbeds
+    }]);
+  });
+
+  await t.test('lets sync failures reach the shared error handler', async () => {
+    const { interaction } = createInteraction();
+    const failing: IssueSync = async () => {
+      throw new Error('Starter message unavailable for this post.');
+    };
+
+    await assert.rejects(createIssueCommand(failing).execute(interaction), /Starter message unavailable/);
+  });
+
   await t.test('lists created, existing and failed issues', async () => {
     const { interaction, replies } = createInteraction();
     const sync = syncReturning({
