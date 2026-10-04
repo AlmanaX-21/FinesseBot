@@ -1,5 +1,6 @@
 import {
   ChatInputCommandInteraction,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder
 } from 'discord.js';
@@ -44,7 +45,7 @@ export function createIssueCommand(syncForumPost: IssueSync | null) {
       }
 
       const result = await syncForumPost(thread);
-      await interaction.editReply({ content: describeResult(result) });
+      await interaction.editReply({ content: describeResult(result), flags: MessageFlags.SuppressEmbeds });
     }
   };
 }

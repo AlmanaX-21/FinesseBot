@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ChatInputCommandInteraction, PermissionFlagsBits } from 'discord.js';
+import { ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits } from 'discord.js';
 import { createIssueCommand } from '../../src/commands/issue.js';
 import { IssueSync, SyncResult } from '../../src/issues/types.js';
 
 interface ReplyPayload {
   content?: string;
   ephemeral?: boolean;
+  flags?: number;
 }
 
 function createInteraction(channel: unknown = { isThread: () => true }) {
@@ -74,7 +75,7 @@ test('Issue slash command', async (t) => {
     const { interaction, replies, wasDeferredEphemeral } = createInteraction();
     await createIssueCommand(syncReturning({ status: 'untagged' })).execute(interaction);
     assert.equal(wasDeferredEphemeral(), true);
-    assert.deepEqual(replies, [{ content: '⚠️ Add a mod tag to this post first.' }]);
+    assert.deepEqual(replies, [{ content: '⚠️ Add a mod tag to this post first.', flags: MessageFlags.SuppressEmbeds }]);
   });
 
   await t.test('lists created, existing and failed issues', async () => {
@@ -93,7 +94,8 @@ test('Issue slash command', async (t) => {
         '✅ Created [AlmanaX-21/OtherMod#2](https://github.com/AlmanaX-21/OtherMod/issues/2)',
         '🔗 Already tracked: [AlmanaX-21/LogisticsNetworks#1](https://github.com/AlmanaX-21/LogisticsNetworks/issues/1)',
         '❌ GitHub 404 for AlmanaX-21/ThirdMod: Not Found'
-      ].join('\n')
+      ].join('\n'),
+      flags: MessageFlags.SuppressEmbeds
     }]);
   });
 });
