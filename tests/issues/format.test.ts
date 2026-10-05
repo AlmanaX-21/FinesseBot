@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildIssueDraft, issueLink, reposForTags } from '../../src/issues/format.js';
-import { ForumPost } from '../../src/issues/types.js';
+import { buildConversationComments, buildIssueDraft, issueLink, reposForTags } from '../../src/issues/format.js';
+import { ForumPost, ThreadReply } from '../../src/issues/types.js';
 import { IssueForum } from '../../src/types.js';
 
 const forum: IssueForum = {
@@ -91,4 +91,68 @@ test('issueLink formats a markdown link', () => {
     }),
     '[AlmanaX-21/LogisticsNetworks#42](https://github.com/AlmanaX-21/LogisticsNetworks/issues/42)'
   );
+});
+
+function reply(index: number, overrides: Partial<ThreadReply> = {}): ThreadReply {
+  return {
+    author: `Member ${index}`,
+    content: `reply ${index}`,
+    attachments: [],
+    createdAt: new Date(Date.UTC(2026, 9, 4, 14, index)),
+    ...overrides
+  };
+}
+
+test('buildConversationComments renders replies under one heading', () => {
+  assert.deepEqual(buildConversationComments([reply(0), reply(3)]), [[
+    '### Discord conversation',
+    '',
+    '**Member 0** · 2026-10-04 14:00 UTC',
+    'reply 0',
+    '',
+    '**Member 3** · 2026-10-04 14:03 UTC',
+    'reply 3'
+  ].join('\n')]);
+});
+
+test('buildConversationComments neutralizes mentions and lists attachments', () => {
+  const [comment] = buildConversationComments([reply(1, {
+    author: '@Marko',
+    content: 'ping @Almana',
+    attachments: [{ name: 'log[1].txt', url: 'https://cdn.discordapp.com/log.txt' }]
+  })]);
+
+  assert.ok(comment.includes('**@\u200BMarko** · 2026-10-04 14:01 UTC\nping @\u200BAlmana\n'));
+  assert.ok(comment.endsWith('- [log\\[1\\].txt](https://cdn.discordapp.com/log.txt)'));
+});
+
+test('buildConversationComments keeps attachment-only replies and skips empty ones', () => {
+  const [comment] = buildConversationComments([
+    reply(1, { content: ' ' }),
+    reply(2, { content: '', attachments: [{ name: 'shot.png', url: 'https://cdn.discordapp.com/shot.png' }] })
+  ]);
+
+  assert.equal(comment, [
+    '### Discord conversation',
+    '',
+    '**Member 2** · 2026-10-04 14:02 UTC',
+    '- [shot.png](https://cdn.discordapp.com/shot.png)'
+  ].join('\n'));
+});
+
+test('buildConversationComments returns nothing without replies', () => {
+  assert.deepEqual(buildConversationComments([]), []);
+  assert.deepEqual(buildConversationComments([reply(1, { content: '' })]), []);
+});
+
+test('buildConversationComments splits long conversations at reply boundaries', () => {
+  const replies = Array.from({ length: 30 }, (_, index) => reply(index, { content: 'x'.repeat(3_000) }));
+
+  const comments = buildConversationComments(replies);
+
+  assert.equal(comments.length, 2);
+  assert.ok(comments.every(comment => comment.length <= 65_000));
+  assert.ok(comments[0].startsWith('### Discord conversation\n\n**Member 0**'));
+  assert.ok(comments[1].startsWith('**Member '));
+  assert.equal((comments.join('\n\n').match(/\*\*Member \d+\*\*/gu) ?? []).length, 30);
 });

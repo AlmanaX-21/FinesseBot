@@ -9,6 +9,13 @@ export interface ForumPost {
   tagNames: string[];
 }
 
+export interface ThreadReply {
+  author: string;
+  content: string;
+  attachments: ForumPost['attachments'];
+  createdAt: Date;
+}
+
 export interface IssueDraft {
   title: string;
   body: string;
