@@ -18,6 +18,10 @@ function neutralizeMentions(text: string): string {
   return text.replace(/@/gu, '@\u200B');
 }
 
+function attachmentList(attachments: ForumPost['attachments']): string {
+  return attachments.map(file => `- [${escapeBrackets(file.name)}](${file.url})`).join('\n');
+}
+
 export function reposForTags(forum: IssueForum, tagNames: string[]): string[] {
   return mapTags(forum.repos, tagNames);
 }
@@ -26,8 +30,7 @@ export function buildIssueDraft(forum: IssueForum, post: ForumPost): IssueDraft 
   const sections = [neutralizeMentions(post.content.trim()) || NO_DESCRIPTION];
 
   if (post.attachments.length > 0) {
-    const links = post.attachments.map(file => `- [${escapeBrackets(file.name)}](${file.url})`);
-    sections.push(`### Attachments\n${links.join('\n')}`);
+    sections.push(`### Attachments\n${attachmentList(post.attachments)}`);
   }
 
   sections.push(
