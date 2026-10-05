@@ -37,3 +37,12 @@ export async function createIssue(
   const data = await postToRepo(token, repo, 'issues', draft);
   return { repo, issue_number: data.number, issue_url: data.html_url };
 }
+
+export async function createComment(
+  token: string,
+  repo: string,
+  issueNumber: number,
+  body: string
+): Promise<void> {
+  await postToRepo(token, repo, `issues/${issueNumber}/comments`, { body });
+}
