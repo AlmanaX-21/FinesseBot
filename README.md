@@ -53,6 +53,7 @@ Add an `issueForums` entry to `config.json` for each forum channel:
 
 - A new post creates one issue per mod tag. Posts without a mod tag wait until one is added.
 - Adding a mod tag to an existing post creates the missing issue. Removing or changing a tag leaves existing issues in place.
+- Replies already in the post, excluding bots, are added to each new issue as a comment. Later replies stay on Discord.
 - `/issue` runs the same sync inside a post. Use it for archived posts or to retry after a GitHub error. It requires Manage Threads by default.
 - Automatic sync failures are logged, not posted in the thread.
 
