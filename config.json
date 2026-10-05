@@ -26,5 +26,12 @@
       "messageCount": 15000,
       "timeInServerDays": null
     }
+  ],
+  "issueForums": [
+    {
+      "channelId": "1482934846933303507",
+      "repos": { "Logistics Networks": "Almana-mc/LogisticsNetworks" },
+      "labels": { "bugs": "bug", "feature": "enhancement" }
+    }
   ]
 }
