@@ -3,9 +3,9 @@ import { AnyThreadChannel, ChannelType, ForumChannel, Message, MessageFlags } fr
 import { Database as DatabaseInstance } from 'better-sqlite3';
 import { IssueForum } from '../types.js';
 import { getLinkedIssues, saveLinkedIssue } from './database.js';
-import { buildIssueDraft, issueLink, reposForTags } from './format.js';
-import { createIssue } from './github.js';
-import { ForumPost, IssueDraft, IssueSync, LinkedIssue, SyncResult } from './types.js';
+import { buildConversationComments, buildIssueDraft, issueLink, reposForTags } from './format.js';
+import { createComment, createIssue } from './github.js';
+import { ForumPost, IssueDraft, IssueSync, LinkedIssue, SyncResult, ThreadReply } from './types.js';
 
 interface IssueSyncOptions {
   db: DatabaseInstance;
@@ -42,22 +42,58 @@ async function fetchStarterMessage(
   throw new Error('Starter message unavailable for this post.', { cause: lastError });
 }
 
+function authorName(message: Message<true>): string {
+  return message.member?.displayName ?? message.author.displayName;
+}
+
+function attachmentsOf(message: Message<true>): ForumPost['attachments'] {
+  return message.attachments.map(file => ({ name: file.name, url: file.url }));
+}
+
 function toForumPost(thread: AnyThreadChannel, message: Message<true>, tagNames: string[]): ForumPost {
   return {
     title: thread.name,
     url: thread.url,
-    author: message.member?.displayName ?? message.author.displayName,
+    author: authorName(message),
     content: message.cleanContent,
-    attachments: message.attachments.map(file => ({ name: file.name, url: file.url })),
+    attachments: attachmentsOf(message),
     tagNames
   };
+}
+
+async function fetchReplies(thread: AnyThreadChannel): Promise<ThreadReply[]> {
+  const messages: Message<true>[] = [];
+  // Starter id equals thread id
+  let after = thread.id;
+  for (;;) {
+    const page = await thread.messages.fetch({ after, limit: 100 });
+    const batch = [...page.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+    messages.push(...batch);
+    if (page.size < 100) break;
+    after = batch[batch.length - 1].id;
+  }
+  return messages
+    .filter(message => !message.author.bot && !message.system)
+    .map(message => ({
+      author: authorName(message),
+      content: message.cleanContent,
+      attachments: attachmentsOf(message),
+      createdAt: message.createdAt
+    }));
+}
+
+async function postConversation(token: string, issue: LinkedIssue, comments: string[]): Promise<void> {
+  for (const body of comments) {
+    await createComment(token, issue.repo, issue.issue_number, body);
+  }
 }
 
 async function createIssues(
   options: IssueSyncOptions,
   thread: AnyThreadChannel,
   repos: string[],
-  draft: IssueDraft
+  draft: IssueDraft,
+  comments: string[]
 ): Promise<{ created: LinkedIssue[]; errors: string[] }> {
   const created: LinkedIssue[] = [];
   const errors: string[] = [];
@@ -67,6 +103,9 @@ async function createIssues(
       const issue = await createIssue(options.token, repo, draft);
       saveLinkedIssue(options.db, thread.id, issue);
       created.push(issue);
+      await postConversation(options.token, issue, comments).catch((error: Error) => {
+        throw new Error(`Conversation comment failed: ${error.message}`);
+      });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       console.error('[Issue Error]:', reason);
@@ -119,7 +158,11 @@ export function createIssueSync(options: IssueSyncOptions): IssueSync {
     try {
       const message = await fetchStarterMessage(thread, retryDelayMs);
       const draft = buildIssueDraft(forum, toForumPost(thread, message, tagNames));
-      const { created, errors } = await createIssues(options, thread, pending, draft);
+      const comments = await fetchReplies(thread).then(buildConversationComments).catch(error => {
+        console.error('[Issue Comment Error]:', error);
+        return [];
+      });
+      const { created, errors } = await createIssues(options, thread, pending, draft, comments);
       return { status: 'synced', created, existing, errors };
     } finally {
       keys.forEach(key => inFlight.delete(key));

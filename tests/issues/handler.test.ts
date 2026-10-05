@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { AnyThreadChannel, ChannelType, MessageFlags } from 'discord.js';
 import { getLinkedIssues } from '../../src/issues/database.js';
 import { tagsChanged } from '../../src/issues/handler.js';
-import { createSync, createThreadFixture, stubGitHub } from './fixtures.js';
+import { createReply, createSync, createThreadFixture, stubGitHub } from './fixtures.js';
 
 test('Forum issue sync', async (t) => {
   const originalFetch = globalThis.fetch;
@@ -113,6 +113,85 @@ test('Forum issue sync', async (t) => {
     assert.ok(result.status === 'synced');
     assert.equal(result.created.length, 1);
     assert.equal(getLinkedIssues(db, 'thread-1').length, 1);
+  });
+
+  await t.test('copies human replies to each created issue', async () => {
+    const requests = stubGitHub();
+    const { syncForumPost } = createSync();
+    const { thread } = createThreadFixture({
+      appliedTags: ['tag-ln', 'tag-om'],
+      replies: [
+        createReply(0),
+        createReply(1, { author: { displayName: 'FinesseBot', bot: true } }),
+        createReply(2, { system: true }),
+        createReply(3)
+      ]
+    });
+
+    await syncForumPost(thread);
+
+    assert.deepEqual(requests.map(request => request.url), [
+      'https://api.github.com/repos/AlmanaX-21/LogisticsNetworks/issues',
+      'https://api.github.com/repos/AlmanaX-21/LogisticsNetworks/issues/1/comments',
+      'https://api.github.com/repos/AlmanaX-21/OtherMod/issues',
+      'https://api.github.com/repos/AlmanaX-21/OtherMod/issues/2/comments'
+    ]);
+    assert.equal(requests[1].body.body, [
+      '### Discord conversation',
+      '',
+      '**Member 0** · 2026-10-04 14:00 UTC',
+      'reply 0',
+      '',
+      '**Member 3** · 2026-10-04 14:03 UTC',
+      'reply 3'
+    ].join('\n'));
+    assert.equal(requests[3].body.body, requests[1].body.body);
+  });
+
+  await t.test('pages through long conversations oldest first', async () => {
+    const requests = stubGitHub();
+    const { syncForumPost } = createSync();
+    const replies = Array.from({ length: 150 }, (_, index) => createReply(index));
+    const { thread, fetches } = createThreadFixture({ appliedTags: ['tag-ln'], replies });
+
+    await syncForumPost(thread);
+
+    assert.deepEqual(fetches, [
+      { after: 'thread-1', limit: 100 },
+      { after: 'reply-99', limit: 100 }
+    ]);
+    const comment = requests[1].body.body;
+    assert.ok(comment.indexOf('**Member 0**') < comment.indexOf('**Member 149**'));
+    assert.equal((comment.match(/\*\*Member \d+\*\*/gu) ?? []).length, 150);
+  });
+
+  await t.test('keeps the issue when the conversation comment fails', async () => {
+    stubGitHub([], true);
+    const { db, syncForumPost } = createSync();
+    const { thread, sent } = createThreadFixture({ appliedTags: ['tag-ln'], replies: [createReply(0)] });
+
+    const result = await syncForumPost(thread);
+
+    assert.ok(result.status === 'synced');
+    assert.equal(result.created.length, 1);
+    assert.match(result.errors[0], /^Conversation comment failed: GitHub 422 .*Validation Failed/);
+    assert.equal(getLinkedIssues(db, 'thread-1').length, 1);
+    assert.equal(sent.length, 1);
+  });
+
+  await t.test('creates the issue without a comment when replies cannot be fetched', async () => {
+    const requests = stubGitHub();
+    const { syncForumPost } = createSync();
+    const { thread } = createThreadFixture({ appliedTags: ['tag-ln'], repliesFail: true });
+
+    const result = await syncForumPost(thread);
+
+    assert.ok(result.status === 'synced');
+    assert.equal(result.created.length, 1);
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(requests.map(request => request.url), [
+      'https://api.github.com/repos/AlmanaX-21/LogisticsNetworks/issues'
+    ]);
   });
 });
 
