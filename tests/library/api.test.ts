@@ -73,9 +73,21 @@ test('library API client', async (t) => {
     await assert.rejects(searchNetworks({}), { status: 0, code: 'unreachable' });
   });
 
+  await t.test('reads the Retry-After wait on rate limits', async () => {
+    stubFetch(() => new Response(JSON.stringify({ error: 'rate-limited' }), {
+      status: 429,
+      headers: { 'Retry-After': '125' }
+    }));
+    await assert.rejects(searchNetworks({}), { status: 429, code: 'rate-limited', retryAfter: 125 });
+  });
+
   await t.test('turns errors into user messages', () => {
     assert.equal(errorMessage(new LibraryError(404, 'not-found')), "That network isn't in the library any more.");
     assert.equal(errorMessage(new LibraryError(429, 'rate-limited')), 'The library is busy, try again in a minute.');
+    assert.equal(errorMessage(new LibraryError(429, 'rate-limited', 1)), 'The library is busy, try again in 1 second.');
+    assert.equal(errorMessage(new LibraryError(429, 'rate-limited', 45)), 'The library is busy, try again in 45 seconds.');
+    assert.equal(errorMessage(new LibraryError(429, 'rate-limited', 60)), 'The library is busy, try again in a minute.');
+    assert.equal(errorMessage(new LibraryError(429, 'rate-limited', 125)), 'The library is busy, try again in 3 minutes.');
     assert.equal(errorMessage(new LibraryError(400, 'bad-type')), "That resource type filter isn't valid.");
     assert.equal(errorMessage(new LibraryError(503, 'unknown')), "Couldn't reach the network library, try again later.");
     assert.equal(errorMessage(new LibraryError(0, 'unreachable')), "Couldn't reach the network library, try again later.");
