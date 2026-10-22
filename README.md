@@ -9,6 +9,7 @@ A Discord bot for activity roles, commission tickets, and editable response tags
 - Lets clients claim and staff close private commission channels.
 - Serves Discord Markdown responses from editable tag files.
 - Turns tagged forum posts into GitHub issues in each mod's repository.
+- Looks up Logistics Network library networks with `/network`.
 
 ## Filesystem tags
 
@@ -60,6 +61,23 @@ Add an `issueForums` entry to `config.json` for each forum channel:
 Set `GITHUB_TOKEN` to a fine-grained personal access token with access to each mod repository and the **Issues: Read and write** permission. Without it, sync is disabled. On the VPS, add the token to `/etc/finessebot/environment` and `issueForums` to `/var/lib/finessebot/config.json`, then restart the service.
 
 The bot needs View Channel, Send Messages in Posts and Read Message History in each tracked forum. Enable the forum's **Require Tags** setting so posts arrive tagged; Discord cannot require a mod tag specifically. Repeated `GitHub 401` errors in the logs mean the token has expired.
+
+## Network library
+
+`/network` looks up networks in the [Logistics Network library](https://logistics-network.almanax21.com/library.html) through its public API. The bot only reads from the library.
+
+| Command | Reply |
+| --- | --- |
+| `/network search [query] [type] [author]` | Private results, five per page. **View** opens a network, with **Back** and **Share in channel**. |
+| `/network show <network>` | Public card with the graph picture, stats and links. |
+| `/network link <network>` | Public card with the permanent visualiser and download links. |
+| `/network random [type]` | Public card for a random network. |
+
+`show` and `link` suggest names as you type from a list the bot reloads every five minutes. Typing a name without picking a suggestion also works. Search buttons work for 15 minutes, only for the member who searched, and stop working after a bot restart.
+
+Set `LNET_BASE_URL` to use another library server, for example `http://localhost:8794` while running the website with `npm run dev`. It defaults to `https://logistics-network.almanax21.com`. Discord cannot load images from localhost, so graph pictures appear broken in local testing.
+
+The library allows the whole bot 300 searches and lookups per five minutes. When it is busy, members see a message asking them to try again in a minute. Discord fetches the graph pictures itself.
 
 ## Discord setup
 
