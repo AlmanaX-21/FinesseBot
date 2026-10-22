@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LibraryError, errorMessage, getNetwork, searchNetworks } from '../../src/library/api.js';
+import { LibraryError, errorMessage, getNetwork, searchIfChanged, searchNetworks } from '../../src/library/api.js';
 import { SITE, jsonResponse, network, stubFetch } from './fixtures.js';
 
 test('library API client', async (t) => {
@@ -79,6 +79,22 @@ test('library API client', async (t) => {
       headers: { 'Retry-After': '125' }
     }));
     await assert.rejects(searchNetworks({}), { status: 429, code: 'rate-limited', retryAfter: 125 });
+  });
+
+  await t.test('sends the last tag and returns nothing when unchanged', async () => {
+    const requests = stubFetch(() => new Response(null, { status: 304 }));
+    assert.equal(await searchIfChanged({ limit: 50 }, '"v1"'), undefined);
+    assert.equal((requests[0].init.headers as Record<string, string>)['If-None-Match'], '"v1"');
+  });
+
+  await t.test('returns the page and its tag when changed', async () => {
+    const requests = stubFetch(() => new Response(JSON.stringify({ total: 1, results: [network()] }), {
+      headers: { ETag: '"v2"' }
+    }));
+    const changed = await searchIfChanged({ limit: 50 });
+    assert.equal(changed?.etag, '"v2"');
+    assert.equal(changed?.page.total, 1);
+    assert.equal((requests[0].init.headers as Record<string, string>)['If-None-Match'], undefined);
   });
 
   await t.test('turns errors into user messages', () => {

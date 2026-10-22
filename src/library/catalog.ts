@@ -1,4 +1,4 @@
-import { searchNetworks } from './api.js';
+import { searchIfChanged, searchNetworks } from './api.js';
 import { cut } from './cards.js';
 import { Network } from './types.js';
 
@@ -7,17 +7,19 @@ const REFRESH_MS = 5 * 60 * 1000;
 const MAX_CHOICES = 25;
 
 let networks: Network[] = [];
+let etag: string | undefined;
 
 export async function refreshCatalog(): Promise<void> {
-  const loaded: Network[] = [];
-  let total = Infinity;
-  while (loaded.length < total) {
+  const first = await searchIfChanged({ limit: BATCH_SIZE, offset: 0 }, etag);
+  if (!first) return;
+  const loaded = [...first.page.results];
+  while (loaded.length > 0 && loaded.length < first.page.total) {
     const page = await searchNetworks({ limit: BATCH_SIZE, offset: loaded.length });
     if (page.results.length === 0) break;
-    total = page.total;
     loaded.push(...page.results);
   }
   networks = loaded;
+  etag = first.etag;
 }
 
 export function startCatalog(): void {

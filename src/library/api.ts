@@ -16,13 +16,17 @@ function baseUrl(): string {
   return (process.env.LNET_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/u, '');
 }
 
-function send(path: string, params: Record<string, string | number | undefined>): Promise<Response> {
+function send(
+  path: string,
+  params: Record<string, string | number | undefined>,
+  headers: Record<string, string> = {}
+): Promise<Response> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') query.set(key, String(value));
   }
   return fetch(`${baseUrl()}${path}?${query}`, {
-    headers: { Accept: 'application/json', 'User-Agent': 'FinesseBot' },
+    headers: { Accept: 'application/json', 'User-Agent': 'FinesseBot', ...headers },
     signal: AbortSignal.timeout(5_000)
   }).catch(() => {
     throw new LibraryError(0, 'unreachable');
@@ -43,6 +47,15 @@ async function readJson<T>(response: Response): Promise<T> {
 
 export async function searchNetworks(query: SearchQuery): Promise<SearchPage> {
   return readJson(await send('/api/library/search', query));
+}
+
+export async function searchIfChanged(
+  query: SearchQuery,
+  etag?: string
+): Promise<{ page: SearchPage; etag?: string } | undefined> {
+  const response = await send('/api/library/search', query, etag ? { 'If-None-Match': etag } : {});
+  if (response.status === 304) return undefined;
+  return { page: await readJson(response), etag: response.headers.get('ETag') ?? undefined };
 }
 
 export async function getNetwork(id: string): Promise<NetworkDetails> {

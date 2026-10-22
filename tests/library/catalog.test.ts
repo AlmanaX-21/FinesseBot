@@ -73,6 +73,33 @@ test('network catalog', async (t) => {
     assert.equal(suggestNetworks('')[0].name, '🔥'.repeat(49) + '…');
   });
 
+  await t.test('skips the re-read when the library is unchanged', async () => {
+    stubFetch(() => new Response(JSON.stringify({ total: 2, results: networks(2) }), { headers: { ETag: '"v1"' } }));
+    await refreshCatalog();
+    const requests = stubFetch(() => new Response(null, { status: 304 }));
+
+    await refreshCatalog();
+
+    assert.equal(requests.length, 1);
+    assert.equal((requests[0].init.headers as Record<string, string>)['If-None-Match'], '"v1"');
+    assert.equal(suggestNetworks('').length, 2);
+  });
+
+  await t.test('re-reads every page when the library changed', async () => {
+    const requests = stubFetch(url => {
+      const offset = Number(url.searchParams.get('offset'));
+      return new Response(JSON.stringify({ total: library.length, results: library.slice(offset, offset + 50) }), {
+        headers: { ETag: '"v2"' }
+      });
+    });
+
+    await refreshCatalog();
+
+    assert.equal(requests.length, 3);
+    assert.equal((requests[0].init.headers as Record<string, string>)['If-None-Match'], '"v1"');
+    assert.ok(findNetwork('net-119.lnet'));
+  });
+
   await t.test('stops when a page comes back empty', async () => {
     const requests = stubFetch(() => jsonResponse({ total: 10, results: [] }));
     await refreshCatalog();
