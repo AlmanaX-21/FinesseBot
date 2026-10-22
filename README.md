@@ -10,6 +10,7 @@ A Discord bot for activity roles, commission tickets, and editable response tags
 - Serves Discord Markdown responses from editable tag files.
 - Turns tagged forum posts into GitHub issues in each mod's repository.
 - Looks up Logistics Network library networks with `/network`.
+- Posts Minecraft server crash alerts with crash report and log links.
 
 ## Filesystem tags
 
@@ -78,6 +79,30 @@ The bot needs View Channel, Send Messages in Posts and Read Message History in e
 Set `LNET_BASE_URL` to use another library server, for example `http://localhost:8794` while running the website with `npm run dev`. It defaults to `https://logistics-network.almanax21.com`. Discord cannot load images from localhost, so graph pictures appear broken in local testing.
 
 The library allows the whole bot 300 searches and lookups per five minutes. When it is busy, members see how long to wait before trying again. Discord fetches the graph pictures itself.
+
+## Server crash alerts
+
+The bot watches the Minecraft server on Kinetic Hosting through the Kinetic Panel API. When the panel reports a crash, the bot uploads the newest crash report and `logs/latest.log` to [mclo.gs](https://mclo.gs) and posts both links in a Discord channel with the exit code and whether the server ran out of memory.
+
+| Variable | Value |
+| --- | --- |
+| `KINETIC_API_KEY` | API key created in Kinetic Panel. It has full access to the account, so keep it on the VPS only. |
+| `KINETIC_SERVER_ID` | The server's `identifier` from the command below. |
+| `CRASH_CHANNEL_ID` | Channel for alerts. The bot needs View Channel, Send Messages and Embed Links there. |
+| `KINETIC_PANEL_URL` | Optional. Defaults to `https://kineticpanel.net`. |
+
+Find the server identifier with:
+
+```bash
+curl -s -H "Authorization: Bearer $KINETIC_API_KEY" -H "Accept: application/json" https://kineticpanel.net/api/client
+```
+
+Add the variables to `/etc/finessebot/environment` and restart the service. The journal shows `Crash watch connected to server <id>` once the bot is listening. Without all three required variables, crash alerts are disabled. The watcher needs Node.js 22 or newer.
+
+- A crash is the panel's `Detected server process in a crashed state!` console message, or its notice that automatic restart is turned off. Stopping or restarting from the panel, or a clean `stop`, posts nothing.
+- The crash report link appears only if a report was written in the two minutes before the crash. Out-of-memory kills and JVM crashes usually leave none.
+- The bot reads `latest.log` as soon as the crash is reported. If the automatic restart has already replaced it, the link shows the new startup log.
+- Logs over 25,000 lines or 10 MiB are cut to their last lines. mclo.gs masks IP addresses but cannot guarantee all private data is removed, and anyone with a link can read the log. Logs expire 90 days after their last view.
 
 ## Discord setup
 
