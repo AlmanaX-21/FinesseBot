@@ -73,11 +73,11 @@ The bot needs View Channel, Send Messages in Posts and Read Message History in e
 | `/network link <network>` | Public card with the permanent visualiser and download links. |
 | `/network random [type]` | Public card for a random network. |
 
-`show` and `link` suggest names as you type from a list the bot reloads every five minutes. Typing a name without picking a suggestion also works. Search buttons work for 15 minutes, only for the member who searched, and stop working after a bot restart.
+`show` and `link` suggest names as you type from a list the bot checks for changes every five minutes. Typing a name without picking a suggestion also works. Search buttons work for 15 minutes, only for the member who searched, and stop working after a bot restart.
 
 Set `LNET_BASE_URL` to use another library server, for example `http://localhost:8794` while running the website with `npm run dev`. It defaults to `https://logistics-network.almanax21.com`. Discord cannot load images from localhost, so graph pictures appear broken in local testing.
 
-The library allows the whole bot 300 searches and lookups per five minutes. When it is busy, members see a message asking them to try again in a minute. Discord fetches the graph pictures itself.
+The library allows the whole bot 300 searches and lookups per five minutes. When it is busy, members see how long to wait before trying again. Discord fetches the graph pictures itself.
 
 ## Discord setup
 
