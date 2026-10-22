@@ -99,7 +99,7 @@ curl -s -H "Authorization: Bearer $KINETIC_API_KEY" -H "Accept: application/json
 
 Add the variables to `/etc/finessebot/environment` and restart the service. The journal shows `Crash watch connected to server <id>` once the bot is listening. Without all three required variables, crash alerts are disabled. The watcher needs Node.js 22 or newer.
 
-- A crash is the panel's `Detected server process in a crashed state!` console message, or its notice that automatic restart is turned off. Stopping or restarting from the panel, or a clean `stop`, posts nothing.
+- A crash is the panel's `Detected server process in a crashed state!` console message, or its notice that automatic restart is turned off. Stopping or restarting from the panel, or typing `stop` in the panel console, posts nothing. An in-game `/stop` usually counts as a crash with exit code 0.
 - The crash report link appears only if a report was written in the two minutes before the crash. Out-of-memory kills and JVM crashes usually leave none.
 - The bot reads `latest.log` as soon as the crash is reported. If the automatic restart has already replaced it, the link shows the new startup log.
 - Logs over 25,000 lines or 10 MiB are cut to their last lines. mclo.gs masks IP addresses but cannot guarantee all private data is removed, and anyone with a link can read the log. Logs expire 90 days after their last view.
