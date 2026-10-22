@@ -4,13 +4,14 @@ import {
   Client,
   GatewayIntentBits,
   Events,
+  MessageFlags,
   REST,
   Routes
 } from 'discord.js';
 import { loadConfig } from './config.js';
 import { MemberStore } from './database.js';
 import { syncMemberRoles, syncGuildRoles } from './assigner.js';
-import { commands } from './commands/index.js';
+import { commands, networkCommand } from './commands/index.js';
 import { getTicketDb } from './tickets/database.js';
 import { startApiServer } from './tickets/api-server.js';
 import { buildClaimModal, handleClaimModalSubmit } from './tickets/claim-handler.js';
@@ -24,6 +25,8 @@ import { createTagHandler } from './tags/handler.js';
 import { initIssueDb } from './issues/database.js';
 import { createIssueSync, tagsChanged } from './issues/handler.js';
 import { createIssueCommand } from './commands/issue.js';
+import { handleNetworkButton } from './library/buttons.js';
+import { startCatalog } from './library/catalog.js';
 
 dotenv.config();
 if (existsSync('.env.local')) {
@@ -84,6 +87,7 @@ async function registerSlashCommands(appId: string): Promise<void> {
 client.once(Events.ClientReady, async readyClient => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   await registerSlashCommands(readyClient.user.id);
+  startCatalog();
 
   startApiServer({
     db: ticketDb,
@@ -154,6 +158,13 @@ client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+  if (interaction.isAutocomplete()) {
+    if (interaction.commandName === networkCommand.data.name) {
+      await networkCommand.autocomplete(interaction).catch(err => console.warn('[Autocomplete Error]:', err));
+    }
+    return;
+  }
+
   if (interaction.isChatInputCommand()) {
     const command = botCommands.find(c => c.data.name === interaction.commandName);
     if (!command) {
@@ -180,7 +191,14 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 
   if (interaction.isButton()) {
-    if (interaction.customId === 'btn_claim_ticket') {
+    if (interaction.customId.startsWith('net:')) {
+      await handleNetworkButton(interaction).catch(async err => {
+        console.error('[Network Button Error]:', err);
+        if (interaction.deferred || interaction.replied) {
+          await interaction.followUp({ content: '❌ Something went wrong.', flags: MessageFlags.Ephemeral }).catch(() => undefined);
+        }
+      });
+    } else if (interaction.customId === 'btn_claim_ticket') {
       await interaction.showModal(buildClaimModal());
     } else if (interaction.customId === 'btn_close_ticket') {
       await handleCloseRequest(interaction, ticketDb);
