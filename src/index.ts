@@ -27,6 +27,7 @@ import { createIssueSync, tagsChanged } from './issues/handler.js';
 import { createIssueCommand } from './commands/issue.js';
 import { handleNetworkButton } from './library/buttons.js';
 import { startCatalog } from './library/catalog.js';
+import { startCrashWatch } from './crashes/watcher.js';
 
 dotenv.config();
 if (existsSync('.env.local')) {
@@ -88,6 +89,7 @@ client.once(Events.ClientReady, async readyClient => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   await registerSlashCommands(readyClient.user.id);
   startCatalog();
+  startCrashWatch(readyClient);
 
   startApiServer({
     db: ticketDb,
